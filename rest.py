@@ -87,11 +87,13 @@ class restful:
             print 'url=|' + fullurl + '|'
         if self.id == 'sso':
             self.curl.setopt(pycurl.URL, str(fullurl))
-            p_data = cStringIO.StringIO(json.dumps(data))
-            self.curl.setopt(pycurl.UPLOAD, 1)
-            self.curl.setopt(pycurl.READFUNCTION, cStringIO.StringIO(json.dumps(data)).read)
+            self.curl.setopt(pycurl.CUSTOMREQUEST, "PUT")
+            self.curl.setopt(pycurl.HTTPHEADER, ["Content-Type: application/json"])
+            p_data = json.dumps(data)
+            self.curl.setopt(pycurl.POSTFIELDS,p_data)
+
             if self.debug:
-                print 'message=|' + p_data.read() + '|'
+                print 'message=|' + p_data + '|'
             self.curl.perform()
         else:
             self.__http.request("PUT", url, json.dumps(data), headers=self.headers)
