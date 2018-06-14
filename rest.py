@@ -67,6 +67,7 @@ class restful:
             print 'url=|' + fullurl + '|'
         if self.id == 'sso':
             self.curl.setopt(pycurl.HTTPGET, 1)
+            self.curl.setopt(pycurl.CUSTOMREQUEST, 'GET')
             self.curl.setopt(pycurl.URL, str(fullurl))
             self.curl.perform()
         else:
@@ -116,6 +117,12 @@ class restful:
         else:
             print "Not implemented Yet ?"
             self.__http.request("DELETE", url, headers=self.headers)
+        try:
+            d = json.loads(self.response())
+            return d
+        except:
+            print "ERROR"
+            return None
 
     #####################
     #### generic methods for i/o
@@ -141,7 +148,7 @@ class restful:
 
         d = self.get(url)
         if d:
-            return d['results']
+            return d["results"]
         else:
             return None
 
