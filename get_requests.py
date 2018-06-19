@@ -1,5 +1,5 @@
-# import sys
-# sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+import sys
+sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import McM
 from json import dumps
 

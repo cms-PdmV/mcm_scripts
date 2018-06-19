@@ -1,2 +1,2 @@
-# mcm_scripts
-Repository holding examples of McM scripts
+# McM Scripts
+Repository for using McM scripts and example scripts

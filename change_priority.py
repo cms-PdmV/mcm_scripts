@@ -4,8 +4,8 @@
 # source /afs/cern.ch/cms/PPD/PdmV/tools/wmclient/current/etc/wmclient.sh
 
 import os
-# import sys
-# sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+import sys
+sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import McM
 
 mcm = McM(dev=True)
