@@ -1,22 +1,20 @@
-import sys
-sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+# import sys
+# sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+from rest import McM
+from json import dumps
 
-from rest import *
+mcm = McM(dev=True)
 
-mcm = restful(dev=True)
+# Example to get  ALL requesst which are member of a given campaign and are submitted
+# It uses a generic search for specified columns: query='status=submitted'
+# Queries can be combined: query='status=submitted&member_of_campaign=Summer12'
+all_requests = mcm.get('requests', query='member_of_campaign=Summer12&status=submitted')
+for request in all_requests:
+    print(request['prepid'])
 
-# example to search  ALL requesst which are member of a campaign
-# it uses a generic search for specified columns: query='status=submitted'
-# queries can be combined: query='status=submitted&member_of_campaign=Summer12'
-
-allRequests = mcm.getA('requests',query='member_of_campaign=Summer12&status=submitted')
-for r in allRequests:
-    print(r['prepid'])
-
-# example to retrieve single request dictionary
-# more methods are here:
+# Example to retrieve single request dictionary
+# More methods are here:
 # https://cms-pdmv.cern.ch/mcm/restapi/requests/
-
-single_request = 'TOP-Summer12-00368'
-__single = mcm.getA('requests', single_request, method='get')
-print("Single request prepid: %s" % (__single['prepid']))
+single_request_prepid = 'TOP-Summer12-00368'
+single_request = mcm.get('requests', single_request_prepid, method='get')
+print('Single request "%s":\n%s' % (single_request_prepid, dumps(single_request, indent=4)))

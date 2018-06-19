@@ -1,16 +1,18 @@
-import sys
-sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+# import sys
+# sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+from rest import McM
+from json import dumps
 
-from rest import *
+mcm = McM(dev=True)
 
-mcm = restful(dev=True)
-
-# example to create a request from input dictionary
-# get a default dictionnary with the minimal info required
-new_req = {'pwg':'HIG', 'member_of_campaign':'Summer12'}
+# Example to create a request from input dictionary
+# Get a default dictionary with the minimal info required
+new_request = {'pwg': 'HIG', 'member_of_campaign': 'Summer12'}
 
 # push it to McM
-answer = mcm.putA('requests', new_req)
+put_answer = mcm.put('requests', new_request)
 
-if answer['results']:
-    print("new prepid:", answer['prepid'])
+if put_answer.get('results'):
+    print('New PrepID: %s' % (put_answer['prepid']))
+else:
+    print('Something went wrong while creating a request. %s' % (dumps(put_answer)))

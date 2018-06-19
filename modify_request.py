@@ -1,32 +1,35 @@
-import sys
-sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+# import sys
+# sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+from rest import McM
 
-from rest import *
+mcm = McM(dev=True)
 
-mcm = restful(dev=True)
-
-# example to edit a request parameter(-s) and save it back in McM
-
-#__req_to_update = "HIG-Summer12-01257" # doesn't exists
-__req_to_update = "HIG-Summer12-02358"
-__field_to_update = "time_event"
+# Example to edit a request parameter(-s) and save it back in McM
+# request_prepid_to_update = 'HIG-Summer12-01257' # Doesn't exist
+request_prepid_to_update = 'HIG-Summer12-02358'
+field_to_update = 'time_event'
 
 # get a the dictionnary of a request
-req = mcm.getA("requests", __req_to_update)
+request = mcm.get('requests', request_prepid_to_update)
 
-if "prepid" not in req:
-    # in case the request doesn't exists there is nothing to update
-    print("Request doesn't exist")
+if 'prepid' not in request:
+    # In case the request doesn't exist, there is nothing to update
+    print('Request "%s" doesn\'t exist' % (request_prepid_to_update))
 else:
-    print("Request's '%s' BEFORE update: %s" % (__field_to_update, req[__field_to_update]))
+    print('Request\'s "%s" field "%s" BEFORE update: %s' % (request_prepid_to_update,
+                                                            field_to_update,
+                                                            request[field_to_update]))
 
-    # modify what we want
+    # Modify what we want
     # time_event is a list for each sequence step
-    req[__field_to_update] = [55]
+    request[field_to_update] = [10]
 
-    # push it back to McM
-    answer = mcm.updateA('requests', req)
-    print(answer)
+    # Push it back to McM
+    update_response = mcm.update('requests', request)
+    print('Update response: %s' % (update_response))
 
-    req2 = mcm.getA("requests", __req_to_update)
-    print("Request's '%s' AFTER update: %s" %(__field_to_update, req2[__field_to_update]))
+    # Fetch the request again, after the update, to check whether value actually changed
+    request2 = mcm.get('requests', request_prepid_to_update)
+    print('Request\'s "%s" field "%s" AFTER update: %s' % (request_prepid_to_update,
+                                                           field_to_update,
+                                                           request2[field_to_update]))

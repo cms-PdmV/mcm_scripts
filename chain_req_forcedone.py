@@ -1,15 +1,15 @@
-import sys
-sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
-from rest import *
+# import sys
+# sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+from rest import McM
 
-mcm = restful(dev=True)
+mcm = McM(dev=True)
 
-# example how to move a chained_request to force_done status
-# needs production_manager or higher role
-mcm_cr = mcm.getA("chained_requests",
-        "B2G-chain_RunIISummer15wmLHEGS_flowRunIISpring16DR80PU2016withHLT_flowRunIISpring16MiniAODv2withHLT-00002")
+# Example how to move a chained_request to force_done status
+# Needs production_manager or higher role
+chained_request = mcm.get('chained_requests',
+                          'B2G-chain_RunIISummer15wmLHEGS_flowRunIISpring16DR80PU2016withHLT_flowRunIISpring16MiniAODv2withHLT-00002')
 
-mcm_cr["status"] = "force_done"
+chained_request['status'] = 'force_done'
 
-answer = mcm.updateA("chained_requests", mcm_cr)
-print(answer)
+update_answer = mcm.update('chained_requests', chained_request)
+print(update_answer)
