@@ -185,6 +185,13 @@ class McM:
     def clone_request(self, object_data):
         return self.put('requests', object_data, method='clone')
 
+    def get_range_of_requests(self, query):
+        res = self.__put('restapi/requests/listwithfile', data={'contents': query})
+        if res:
+            return res["results"]
+        else:
+            return None
+
     def delete(self, object_type, object_id):
         url = 'restapi/%s/delete/%s' % (object_type, object_id)
         self.__delete(url)
