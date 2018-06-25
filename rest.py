@@ -178,8 +178,12 @@ class McM:
         res = self.__put(url, object_data)
         return res
 
-    def approve(self, object_type, object_id, level):
-        url = 'restapi/%s/approve/%s/%d' % (object_type, object_id, level)
+    def approve(self, object_type, object_id, level=None):
+        if level is None:
+            url = 'restapi/%s/approve/%s' % (object_type, object_id)
+        else:
+            url = 'restapi/%s/approve/%s/%d' % (object_type, object_id, level)
+
         return self.__get(url)
 
     def clone_request(self, object_data):
