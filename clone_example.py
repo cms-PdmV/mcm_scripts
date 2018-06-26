@@ -1,24 +1,28 @@
 import sys
 sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+from rest import McM
+from json import dumps
 
-from rest import *
+mcm = McM(dev=True)
 
-mcm = restful(dev=True)
+# Script clones a request to other campaign.
+# Fefine list of modifications
+# If member_of_campaign is different, it will clone to other campaign
+modifications = {'extension': 1,
+                 'total_events': 101,
+                 'member_of_campaign': 'Summer12'}
 
+request_prepid_to_clone = "SUS-RunIIWinter15wmLHE-00040"
 
-# script clones a request to other campaign.
-# define list modifications, if member_of_campaign is different
-# it will clone to other campaign
+# Get a request object which we want to clone
+request = mcm.get('requests', request_prepid_to_clone)
 
-modif = {'extension' : 1, 'total_events' : 101, 'member_of_campaign': 'Summer12'}
-__req_prepid = "SUS-RunIIWinter15wmLHE-00040"
+# Make predefined modifications
+for key in modifications:
+    request[key] = modifications[key]
 
-# get a request object which we want to clone
-a_request = mcm.getA('requests', __req_prepid)
-
-# make predefined modifications
-for el in modif:
-    a_request[el] = modif[el]
-
-answer = mcm.clone(a_request['prepid'], a_request)
-print("new_prepid: %s" % (answer["prepid"]))
+clone_answer = mcm.clone_request(request)
+if clone_answer.get('results'):
+    print('Clone PrepID: %s' % (clone_answer['prepid']))
+else:
+    print('Something went wrong while cloning a request. %s' % (dumps(clone_answer)))
