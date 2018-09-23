@@ -199,3 +199,14 @@ class McM:
     def delete(self, object_type, object_id):
         url = 'restapi/%s/delete/%s' % (object_type, object_id)
         self.__delete(url)
+
+    def forceflow(self, prepid):
+        """
+        Forceflow a chained request with given prepid
+        """
+        res = self.__get('restapi/chained_requests/flow/%s/force' % (prepid))
+        if res:
+            return res["results"]
+        else:
+            return None
+
