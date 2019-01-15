@@ -144,20 +144,53 @@ class McM:
         Get data from McM
         object_type - [chained_campaigns, chained_requests, campaigns, requests, flows, etc.]
         object_id - usually prep id of desired object
-        query - query to be run in order to receive an object, e.g. tags=M17p1A
+        query - query to be run in order to receive an object, e.g. tags=M17p1A, multiple parameters can be used with & tags=M17p1A&pwg=HIG
         method - action to be performed, such as get, migrate or inspect
         page - which page to be fetched. -1 means no paginantion, return all results
         """
         if object_id:
-            url = 'restapi/%s/%s/%s' % (object_type, method, object_id.strip())
-        else:
-            url = 'search/?db_name=%s&page=%d&%s' % (object_type, page, query)
+            if self.debug:
+                print('Object ID provided, getting %s' % (object_id.strip()))
 
-        res = self.__get(url)
-        if res:
-            return res["results"]
+            url = 'restapi/%s/%s/%s' % (object_type, method, object_id.strip())
+            res = self.__get(url)
+            if res:
+                return res['results']
+            else:
+                return None
         else:
-            return None
+            if page != -1:
+                if self.debug:
+                    print('Fetching %s page of %s for query %s' % (page, object_type, query))
+
+                url = 'search/?db_name=%s&page=%d&%s' % (object_type, page, query)
+                res = self.__get(url)
+                if res:
+                    return res["results"]
+                else:
+                    return None
+            else:
+                if self.debug:
+                    print('No page provided, will use pagination to build the response list')
+
+                res_page = [{}]
+                res = []
+                page = 0
+                while len(res_page) != 0:
+                    res_page = self.get(object_type=object_type, query=query, method=method, page=page)
+                    if res_page:
+                        res += res_page
+                        if self.debug:
+                            print('Found %s %s in page %s. Total results: %s' % (len(res_page), object_type, page, len(res)))
+
+                        page += 1
+                    else:
+                        break
+
+                if res:
+                    return res
+                else:
+                    return None
 
     def update(self, object_type, object_data):
         """
