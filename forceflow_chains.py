@@ -26,9 +26,13 @@ for i in range(0,len(chained_requests)):
 
         print chained_requests[i]
 
-        chained_request = mcm.get('chained_requests',
-                                     chained_requests[i])
+        if(chained_requests[i].find('BPH') != -1):
+            mcm._McM__delete('restapi/chained_requests/remove_force_flow/%s' % (chained_requests[i]))
+
+            #chained_request = mcm.get('chained_requests',
+             #                     chained_requests[i])
             
-        mcm._McM__get('restapi/chained_requests/flow/%s/force' % (chained_request['prepid']))
+#        mcm._McM__get('restapi/chained_requests/flow/%s/force' % (chained_request['prepid']))
 
         
+

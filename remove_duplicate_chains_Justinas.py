@@ -12,12 +12,11 @@ sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import McM
 
 # McM instance
-mcm = McM(dev=False, cookie='/afs/cern.ch/user/p/pgunnell/private/prod-cookie.txt')
+mcm = McM(dev=True)#, cookie='/afs/cern.ch/user/j/jrumsevi/private/dev_cookie.txt')
 
 requests_query = """
- EXO-RunIIWinter15pLHE-03395 ->  EXO-RunIIWinter15pLHE-03398
+    B2G-RunIIWinter15wmLHE-00035 -> B2G-RunIIWinter15wmLHE-00035
 """
-
 list_of_requests = mcm.get_range_of_requests(requests_query)
 # Iterate through all requests in the range
 for request in list_of_requests:
@@ -26,14 +25,16 @@ for request in list_of_requests:
     # Sort prepids, so biggest number would be last
     member_of_chains = sorted(request.get('member_of_chain', []))
     member_of_chains = [chain for chain in member_of_chains if 'MiniAODv3' in chain]
-    if len(member_of_chains) <= 0:
+
+    print member_of_chains
+
+    if len(member_of_chains) <= 1:
         print('%s is member of none or one chain. Skipping' % (request['prepid']))
         continue
 
-    #print('Will leave %s' % (member_of_chains[-1]))
+    print('Will leave %s' % (member_of_chains[-1]))
     # Leave the last (with biggest number) chain
-    #member_of_chains = member_of_chains[:-1]
-
+    member_of_chains = member_of_chains[:-1]
     print('Will delete:')
     for chain_prepid in member_of_chains:
         print('    %s' % (chain_prepid))
@@ -43,38 +44,18 @@ for request in list_of_requests:
         chain = mcm.get('chained_requests', chain_prepid)
         chain['action_parameters']['flag'] = False
         mcm.update('chained_requests', chain)
-        requests_in_chain = mcm.get('requests', query='member_of_chain=%s' % (chain_prepid))
+        requests_in_chain = mcm.get('requests', query='member_of_chain=%s' % (chain_prepid) )
 
-        requests_inverted = []
+        print requests_in_chain
 
         for request_in_chain in requests_in_chain:
-            
-            requests_inverted.append(request_in_chain)
-
-        requests_inverted = list(reversed(requests_inverted))
-
-        for request_in_chain in requests_inverted:
-
-            print ("Which requests are in the chain? "+str(request_in_chain['prepid']))
-
-            if((request_in_chain['prepid'].find("NanoAODv3")) and (request_in_chain['status'] == "submitted")):
-                print (' Found '+str(chain_prepid))
-                chain['action_parameters']['flag'] = True
-                continue
-
             if len(request_in_chain.get('member_of_chain', [])) > 1:
                 print('    Not deleting %s because it is a member of %d chains' % (request_in_chain['prepid'],
                                                                                    len(request_in_chain.get('member_of_chain', []))))
             else:
-
-                print ('Going to operate in '+str(request_in_chain['prepid']))
-
-                if(request_in_chain['status'] == "new"):
-                    mcm._McM__get('restapi/chained_requests/rewind/%s' % (chain_prepid))
-                    #mcm.get('requests', request_in_chain['prepid'], method='none')
-                    request_delete_result = mcm.delete('requests', request_in_chain['prepid'])
-                    print('    Deleted %s. %s' % (request_in_chain['prepid'], request_delete_result))
-                    #chain_delete_result = mcm.delete('chained_requests', chain_prepid)
+                mcm.get('requests', request_in_chain['prepid'], method='reset')
+                request_delete_result = mcm.delete('requests', request_in_chain['prepid'])
+                print('    Deleted %s. %s' % (request_in_chain['prepid'], request_delete_result))
 
         chain_delete_result = mcm.delete('chained_requests', chain_prepid)
         print('    Deleted %s. %s' % (chain_prepid, chain_delete_result))
