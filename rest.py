@@ -11,13 +11,16 @@ class McM:
     def __init__(self, id='sso', debug=False, cookie=None, dev=True, int=False):
         self.dev = dev
         if self.dev:
-            self.server = 'cms-pdmv-dev.cern.ch/mcm/'
+            self.server = 'cms-pdmv-dev.cern.ch'
         elif int:
-            self.server = 'cms-pdmv-int.cern.ch/mcm/'
+            self.server = 'cms-pdmv-int.cern.ch'
         else:
-            self.server = 'cms-pdmv.cern.ch/mcm/'
+            self.server = 'cms-pdmv.cern.ch'
 
-        self.headers = {}
+        if id == 'cert' or id == 'sso':
+            self.server += '/mcm/'
+
+        self.headers = {'USER_AGENT': 'McM Scripting'}
         self.id = id
         self.debug = debug
         self.__connect(cookie)
@@ -57,10 +60,13 @@ class McM:
             self.curl.setopt(pycurl.CAPATH, '/etc/pki/tls/certs')
             self.curl.setopt(pycurl.WRITEFUNCTION, self.output.write)
         else:
-            self.http_client = httplib.HTTPConnection(self.server)
+            self.http_client = httplib.HTTPSConnection(self.server)
 
     # Generic methods for GET, PUT, DELETE HTTP methods
     def __get(self, url):
+        if self.id != 'sso' and self.id != 'cert':
+            url = '/mcm/' + url
+
         fullurl = 'https://' + self.server + url
         if self.debug:
             print('GET |%s|' % (fullurl))
@@ -82,6 +88,9 @@ class McM:
             return None
 
     def __put(self, url, data):
+        if self.id != 'sso' and self.id != 'cert':
+            url = '/mcm/' + url
+
         fullurl = 'https://' + self.server + url
         post_data = json.dumps(data)
         if self.debug:
@@ -105,6 +114,9 @@ class McM:
             return None
 
     def __delete(self, url):
+        if self.id != 'sso' and self.id != 'cert':
+            url = '/mcm/' + url
+
         fullurl = 'https://' + self.server + url
         if self.debug:
             print('DELETE |%s|' % (fullurl))
