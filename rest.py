@@ -141,6 +141,8 @@ class McM:
         if self.id == 'sso':
             self.output = cStringIO.StringIO()
             self.curl.setopt(pycurl.WRITEFUNCTION, self.output.write)
+        else:
+            self.http_client.close()
 
     def __response(self):
         if self.id == 'sso':
@@ -148,7 +150,9 @@ class McM:
             self.__clear()
             return response
         else:
-            return self.http_client.getresponse().read()
+            response = self.http_client.getresponse().read()
+            self.__clear()
+            return response
 
     # McM methods
     def get(self, object_type, object_id=None, query='', method='get', page=-1):
