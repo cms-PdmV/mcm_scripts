@@ -5,6 +5,7 @@ import httplib
 import pycurl
 import cStringIO
 import traceback
+import time
 
 
 class McM:
@@ -23,27 +24,26 @@ class McM:
         self.headers = {'USER_AGENT': 'McM Scripting'}
         self.id = id
         self.debug = debug
-        self.__connect(cookie)
+        if cookie:
+            self.cookie_filename = cookie
+        else:
+            if self.dev:
+                self.cookie_filename = '%s/private/dev-cookie.txt' % (os.getenv('HOME'))
+            else:
+                self.cookie_filename = '%s/private/prod-cookie.txt' % (os.getenv('HOME'))
 
-    def __connect(self, cookie=None):
+        self.__connect()
+
+    def __connect(self):
         if self.id == 'cert':
             self.http_client = httplib.HTTPSConnection(self.server,
                                                        cert_file=os.getenv('X509_USER_PROXY'),
                                                        key_file=os.getenv('X509_USER_PROXY'))
 
         elif self.id == 'sso':
-            if cookie:
-                self.cookie_filename = cookie
-            else:
-                if self.dev:
-                    self.cookie_filename = '%s/private/dev-cookie.txt' % (os.getenv('HOME'))
-                else:
-                    self.cookie_filename = '%s/private/prod-cookie.txt' % (os.getenv('HOME'))
-
             if not os.path.isfile(self.cookie_filename):
                 print('The required sso cookie file is absent. Trying to make one for you')
-                os.system('cern-get-sso-cookie -u https://%s -o %s --krb' % (self.server,
-                                                                             self.cookie_filename))
+                self.__generate_cookie()
 
                 if not os.path.isfile(self.cookie_filename):
                     print('Unfortunately sso cookie file cannot be made automatically. Quitting...')
@@ -62,56 +62,82 @@ class McM:
         else:
             self.http_client = httplib.HTTPSConnection(self.server)
 
+    def __generate_cookie(self):
+        if self.debug:
+            print('cern-get-sso-cookie -u https://%s -o %s --krb' % (self.server, self.cookie_filename))
+
+        output = os.popen('cern-get-sso-cookie -u https://%s -o %s --krb' % (self.server, self.cookie_filename)).read()
+        if not os.path.isfile(self.cookie_filename) or self.debug:
+            print(output)
+
     # Generic methods for GET, PUT, DELETE HTTP methods
     def __get(self, url):
-        if self.id != 'sso' and self.id != 'cert':
-            url = '/mcm/' + url
+        retries = 0
+        while retries < 3:
+            if self.id != 'sso' and self.id != 'cert':
+                url = '/mcm/' + url
 
-        fullurl = 'https://' + self.server + url
-        if self.debug:
-            print('GET |%s|' % (fullurl))
+            fullurl = 'https://' + self.server + url
+            if self.debug:
+                print('GET |%s|' % (fullurl))
 
-        if self.id == 'sso':
-            self.curl.setopt(pycurl.URL, str(fullurl))
-            self.curl.setopt(pycurl.HTTPGET, 1)
-            self.curl.setopt(pycurl.CUSTOMREQUEST, 'GET')
-            self.curl.perform()
-        else:
-            self.http_client.request("GET", url, headers=self.headers)
+            if self.id == 'sso':
+                self.curl.setopt(pycurl.URL, str(fullurl))
+                self.curl.setopt(pycurl.HTTPGET, 1)
+                self.curl.setopt(pycurl.CUSTOMREQUEST, 'GET')
+                self.curl.perform()
+            else:
+                self.http_client.request("GET", url, headers=self.headers)
 
-        try:
-            res = json.loads(self.__response())
-            return res
-        except Exception as ex:
-            print('Error while making a GET request to %s. Exception: %s' % (fullurl, ex))
-            print(traceback.format_exc())
-            return None
+            retries += 1
+            try:
+                res = json.loads(self.__response())
+                return res
+            except ValueError as ve:
+                print('Most likely cookie is expired, will remake it for you after 15 seconds')
+                time.sleep(15)
+                self.__generate_cookie()
+                self.__connect()
+            except Exception as ex:
+                print('Error while making a GET request to %s. Exception: %s' % (fullurl, ex))
+                print(traceback.format_exc())
+                return None
+
+        return None
 
     def __put(self, url, data):
-        if self.id != 'sso' and self.id != 'cert':
-            url = '/mcm/' + url
+        retries = 0
+        while retries < 3:
+            if self.id != 'sso' and self.id != 'cert':
+                url = '/mcm/' + url
 
-        fullurl = 'https://' + self.server + url
-        post_data = json.dumps(data)
-        if self.debug:
-            print('POST |%s| DATA |%s|' % (fullurl, post_data))
+            fullurl = 'https://' + self.server + url
+            post_data = json.dumps(data)
+            if self.debug:
+                print('POST |%s| DATA |%s|' % (fullurl, post_data))
 
-        if self.id == 'sso':
-            self.curl.setopt(pycurl.URL, str(fullurl))
-            self.curl.setopt(pycurl.CUSTOMREQUEST, "PUT")
-            self.curl.setopt(pycurl.HTTPHEADER, ["Content-Type: application/json"])
-            self.curl.setopt(pycurl.POSTFIELDS, post_data)
-            self.curl.perform()
-        else:
-            self.http_client.request("PUT", url, json.dumps(data), headers=self.headers)
+            if self.id == 'sso':
+                self.curl.setopt(pycurl.URL, str(fullurl))
+                self.curl.setopt(pycurl.CUSTOMREQUEST, "PUT")
+                self.curl.setopt(pycurl.HTTPHEADER, ["Content-Type: application/json"])
+                self.curl.setopt(pycurl.POSTFIELDS, post_data)
+                self.curl.perform()
+            else:
+                self.http_client.request("PUT", url, json.dumps(data), headers=self.headers)
 
-        try:
-            res = json.loads(self.__response())
-            return res
-        except Exception as ex:
-            print('Error while making a PUT request to %s. Exception: %s' % (fullurl, ex))
-            print(traceback.format_exc())
-            return None
+            retries += 1
+            try:
+                res = json.loads(self.__response())
+                return res
+            except ValueError as ve:
+                print('Most likely cookie is expired, will remake it for you after 5 seconds')
+                time.sleep(5)
+                self.__generate_cookie()
+                self.__connect()
+            except Exception as ex:
+                print('Error while making a PUT request to %s. Exception: %s' % (fullurl, ex))
+                print(traceback.format_exc())
+                return None
 
     def __delete(self, url):
         if self.id != 'sso' and self.id != 'cert':
@@ -258,4 +284,3 @@ class McM:
             return res["results"]
         else:
             return None
-
