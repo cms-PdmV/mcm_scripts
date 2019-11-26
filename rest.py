@@ -94,8 +94,8 @@ class McM:
                 res = json.loads(self.__response())
                 return res
             except ValueError as ve:
-                print('Most likely cookie is expired, will remake it for you after 15 seconds')
-                time.sleep(15)
+                print('Most likely cookie is expired, will remake it for you after %s seconds' % (retries ** 3))
+                time.sleep(retries ** 3)
                 self.__generate_cookie()
                 self.__connect()
             except Exception as ex:
@@ -114,7 +114,7 @@ class McM:
             fullurl = 'https://' + self.server + url
             post_data = json.dumps(data)
             if self.debug:
-                print('POST |%s| DATA |%s|' % (fullurl, post_data))
+                print('PUT |%s| DATA |%s|' % (fullurl, post_data))
 
             if self.id == 'sso':
                 self.curl.setopt(pycurl.URL, str(fullurl))
@@ -130,12 +130,46 @@ class McM:
                 res = json.loads(self.__response())
                 return res
             except ValueError as ve:
-                print('Most likely cookie is expired, will remake it for you after 5 seconds')
-                time.sleep(5)
+                print('Most likely cookie is expired, will remake it for you after %s seconds' % (retries ** 3))
+                time.sleep(retries ** 3)
                 self.__generate_cookie()
                 self.__connect()
             except Exception as ex:
                 print('Error while making a PUT request to %s. Exception: %s' % (fullurl, ex))
+                print(traceback.format_exc())
+                return None
+
+    def __post(self, url, data):
+        retries = 0
+        while retries < 3:
+            if self.id != 'sso' and self.id != 'cert':
+                url = '/mcm/' + url
+
+            fullurl = 'https://' + self.server + url
+            post_data = json.dumps(data)
+            if self.debug:
+                print('POST |%s| DATA |%s|' % (fullurl, post_data))
+
+            if self.id == 'sso':
+                self.curl.setopt(pycurl.URL, str(fullurl))
+                self.curl.setopt(pycurl.CUSTOMREQUEST, "POST")
+                self.curl.setopt(pycurl.HTTPHEADER, ["Content-Type: application/json"])
+                self.curl.setopt(pycurl.POSTFIELDS, post_data)
+                self.curl.perform()
+            else:
+                self.http_client.request("POST", url, json.dumps(data), headers=self.headers)
+
+            retries += 1
+            try:
+                res = json.loads(self.__response())
+                return res
+            except ValueError as ve:
+                print('Most likely cookie is expired, will remake it for you after %s seconds' % (retries ** 3))
+                time.sleep(retries ** 3)
+                self.__generate_cookie()
+                self.__connect()
+            except Exception as ex:
+                print('Error while making a POST request to %s. Exception: %s' % (fullurl, ex))
                 print(traceback.format_exc())
                 return None
 
