@@ -14,8 +14,6 @@ requests = mcm.get('requests', query='status=approved&approval=submit')
 
 print len(requests)
 
-i=0
-
 for request in requests:
     
     chained_requests = request['member_of_chain']
