@@ -1,218 +1,155 @@
 import sys
 import os
 import json
-import httplib
-import pycurl
-import cStringIO
 import traceback
+import logging
 import time
+
+try:
+    import cookielib
+except:
+    import http.cookiejar as cookielib
+
+try:
+    import urllib2 as urllib
+except:
+    import urllib.request as urllib
+
+
+class MethodRequest(urllib.Request):
+    """
+    Custom request, so it would support different HTTP methods
+    """
+    def __init__(self, *args, **kwargs):
+        self._method = kwargs.pop('method', None)
+        urllib.Request.__init__(self, *args, **kwargs)
+
+    def get_method(self, *args, **kwargs):
+        if self._method is not None:
+            return self._method
+
+        return urllib.Request.get_method(self, *args, **kwargs)
 
 
 class McM:
     def __init__(self, id='sso', debug=False, cookie=None, dev=True, int=False):
-        self.dev = dev
-        if self.dev:
-            self.server = 'cms-pdmv-dev.cern.ch'
+        if dev:
+            self.host = 'cms-pdmv-dev.cern.ch'
         elif int:
-            self.server = 'cms-pdmv-int.cern.ch'
+            self.host = 'cms-pdmv-int.cern.ch'
         else:
-            self.server = 'cms-pdmv.cern.ch'
+            self.host = 'cms-pdmv.cern.ch'
 
-        if id == 'cert' or id == 'sso':
-            self.server += '/mcm/'
-
-        self.headers = {'USER_AGENT': 'McM Scripting'}
+        self.dev = dev
+        self.server = 'https://' + self.host + '/mcm/'
         self.id = id
-        self.debug = debug
-        if cookie:
-            self.cookie_filename = cookie
+        # Set up logging
+        if debug:
+            logging_level = logging.DEBUG
         else:
-            if self.dev:
-                self.cookie_filename = '%s/private/dev-cookie.txt' % (os.getenv('HOME'))
-            else:
-                self.cookie_filename = '%s/private/prod-cookie.txt' % (os.getenv('HOME'))
+            logging_level = logging.INFO
 
+        if cookie:
+            self.cookie = cookie
+        else:
+            home = os.getenv('HOME')
+            if dev:
+                self.cookie = '%s/private/mcm-dev-cookie.txt' % (home)
+            elif int:
+                self.cookie = '%s/private/mcm-int-cookie.txt' % (home)
+            else:
+                self.cookie = '%s/private/mcm-prod-cookie.txt' % (home)
+
+        # Set up logging
+        logging.basicConfig(format='[%(asctime)s][%(levelname)s] %(message)s', level=logging_level)
+        self.logger = logging.getLogger()
+        # Create opener
         self.__connect()
+        # Request retries
+        self.max_retries = 3
 
     def __connect(self):
-        if self.id == 'cert':
-            self.http_client = httplib.HTTPSConnection(self.server,
-                                                       cert_file=os.getenv('X509_USER_PROXY'),
-                                                       key_file=os.getenv('X509_USER_PROXY'))
-
-        elif self.id == 'sso':
-            if not os.path.isfile(self.cookie_filename):
-                print('The required sso cookie file is absent. Trying to make one for you')
+        if self.id == 'sso':
+            if not os.path.isfile(self.cookie):
+                self.logger.info('SSO cookie file is absent. Will try to make one for you...')
                 self.__generate_cookie()
-
-                if not os.path.isfile(self.cookie_filename):
-                    print('Unfortunately sso cookie file cannot be made automatically. Quitting...')
+                if not os.path.isfile(self.cookie):
+                    self.logger.error('Missing cookie file %s, quitting', self.cookie)
                     sys.exit(1)
             else:
-                print('Found a cookie file at %s. Make sure it\'s not expired!' % (self.cookie_filename))
+                self.logger.info('Using SSO cookie file %s' % (self.cookie))
 
-            self.curl = pycurl.Curl()
-            print('Using sso-cookie file %s' % (self.cookie_filename))
-            self.curl.setopt(pycurl.COOKIEFILE, self.cookie_filename)
-            self.output = cStringIO.StringIO()
-            self.curl.setopt(pycurl.SSL_VERIFYPEER, 1)
-            self.curl.setopt(pycurl.SSL_VERIFYHOST, 2)
-            self.curl.setopt(pycurl.CAPATH, '/etc/pki/tls/certs')
-            self.curl.setopt(pycurl.WRITEFUNCTION, self.output.write)
+            cookie_jar = cookielib.MozillaCookieJar(self.cookie)
+            cookie_jar.load()
+            for cookie in cookie_jar:
+                self.logger.debug('Cookie %s', cookie)
+
+            self.opener = urllib.build_opener(urllib.HTTPCookieProcessor(cookie_jar))
         else:
-            self.http_client = httplib.HTTPSConnection(self.server)
+            self.opener = urllib.build_opener()
 
     def __generate_cookie(self):
-        if self.debug:
-            print('cern-get-sso-cookie -u https://%s -o %s --krb' % (self.server, self.cookie_filename))
-
-        output = os.popen('cern-get-sso-cookie -u https://%s -o %s --krb' % (self.server, self.cookie_filename)).read()
-        if not os.path.isfile(self.cookie_filename) or self.debug:
-            print(output)
+        # use env to have a clean environment
+        command = 'env -i KRB5CCNAME="$KRB5CCNAME" cern-get-sso-cookie -u %s -o %s --reprocess --krb' % (self.server, self.cookie)
+        self.logger.debug(command)
+        output = os.popen(command).read()
+        self.logger.debug(output)
+        if not os.path.isfile(self.cookie):
+            self.logger.error('Could not generate SSO cookie.\n%s', output)
 
     # Generic methods for GET, PUT, DELETE HTTP methods
-    def __get(self, url):
+    def __http_request(self, url, method, data=None, parse_json=True):
+        url = self.server + url
+        self.logger.debug('[%s] %s', method, url)
+        headers = {'User-Agent': 'McM Scripting'}
+        if data:
+            data = json.dumps(data)
+            headers['Content-type'] = 'application/json'
+
+        request = MethodRequest(url, data=data, headers=headers, method='GET')
         retries = 0
-        while retries < 3:
-            if self.id != 'sso' and self.id != 'cert':
-                url = '/mcm/' + url
-
-            fullurl = 'https://' + self.server + url
-            if self.debug:
-                print('GET |%s|' % (fullurl))
-
-            if self.id == 'sso':
-                self.curl.setopt(pycurl.URL, str(fullurl))
-                self.curl.setopt(pycurl.HTTPGET, 1)
-                self.curl.setopt(pycurl.CUSTOMREQUEST, 'GET')
-                self.curl.perform()
-            else:
-                self.http_client.request("GET", url, headers=self.headers)
-
-            retries += 1
+        response = None
+        while retries < self.max_retries:
             try:
-                res = json.loads(self.__response())
-                return res
-            except ValueError as ve:
-                print('Most likely cookie is expired, will remake it for you after %s seconds' % (retries ** 3))
-                time.sleep(retries ** 3)
-                self.__generate_cookie()
-                self.__connect()
-            except Exception as ex:
-                print('Error while making a GET request to %s. Exception: %s' % (fullurl, ex))
-                print(traceback.format_exc())
-                return None
+                retries += 1
+                response = self.opener.open(request)
+                response = response.read()
+                response = response.decode('utf-8')
+                self.logger.debug('Response from %s length %s', url, len(response))
+                if parse_json:
+                    return json.loads(response)
+                else:
+                    return response
 
+            except ValueError:
+                wait_time = retries ** 3
+                if self.id == 'sso':
+                    self.logger.warning('Most likely SSO cookie is expired, will remake it after %s seconds',
+                                        wait_time)
+                    time.sleep(wait_time)
+                    self.__generate_cookie()
+                    self.__connect()
+                else:
+                    self.logger.warning('Error getting response, will retry after %s seconds', wait_time)
+                    time.sleep(wait_time)
+
+        self.logger.error('Error while making a %s request to %s. Response: %s',
+                          method,
+                          url,
+                          response)
         return None
 
-    def __put(self, url, data):
-        retries = 0
-        while retries < 3:
-            if self.id != 'sso' and self.id != 'cert':
-                url = '/mcm/' + url
+    def __get(self, url, parse_json=True):
+        return self.__http_request(url, 'GET', parse_json=parse_json)
 
-            fullurl = 'https://' + self.server + url
-            post_data = json.dumps(data)
-            if self.debug:
-                print('PUT |%s| DATA |%s|' % (fullurl, post_data))
+    def __put(self, url, data, parse_json=True):
+        return self.__http_request(url, 'PUT', data, parse_json=parse_json)
 
-            if self.id == 'sso':
-                self.curl.setopt(pycurl.URL, str(fullurl))
-                self.curl.setopt(pycurl.CUSTOMREQUEST, "PUT")
-                self.curl.setopt(pycurl.HTTPHEADER, ["Content-Type: application/json"])
-                self.curl.setopt(pycurl.POSTFIELDS, post_data)
-                self.curl.perform()
-            else:
-                self.http_client.request("PUT", url, json.dumps(data), headers=self.headers)
+    def __post(self, url, data, parse_json=True):
+        return self.__http_request(url, 'POST', data, parse_json=parse_json)
 
-            retries += 1
-            try:
-                res = json.loads(self.__response())
-                return res
-            except ValueError as ve:
-                print('Most likely cookie is expired, will remake it for you after %s seconds' % (retries ** 3))
-                time.sleep(retries ** 3)
-                self.__generate_cookie()
-                self.__connect()
-            except Exception as ex:
-                print('Error while making a PUT request to %s. Exception: %s' % (fullurl, ex))
-                print(traceback.format_exc())
-                return None
-
-    def __post(self, url, data):
-        retries = 0
-        while retries < 3:
-            if self.id != 'sso' and self.id != 'cert':
-                url = '/mcm/' + url
-
-            fullurl = 'https://' + self.server + url
-            post_data = json.dumps(data)
-            if self.debug:
-                print('POST |%s| DATA |%s|' % (fullurl, post_data))
-
-            if self.id == 'sso':
-                self.curl.setopt(pycurl.URL, str(fullurl))
-                self.curl.setopt(pycurl.CUSTOMREQUEST, "POST")
-                self.curl.setopt(pycurl.HTTPHEADER, ["Content-Type: application/json"])
-                self.curl.setopt(pycurl.POSTFIELDS, post_data)
-                self.curl.perform()
-            else:
-                self.http_client.request("POST", url, json.dumps(data), headers=self.headers)
-
-            retries += 1
-            try:
-                res = json.loads(self.__response())
-                return res
-            except ValueError as ve:
-                print('Most likely cookie is expired, will remake it for you after %s seconds' % (retries ** 3))
-                time.sleep(retries ** 3)
-                self.__generate_cookie()
-                self.__connect()
-            except Exception as ex:
-                print('Error while making a POST request to %s. Exception: %s' % (fullurl, ex))
-                print(traceback.format_exc())
-                return None
-
-    def __delete(self, url):
-        if self.id != 'sso' and self.id != 'cert':
-            url = '/mcm/' + url
-
-        fullurl = 'https://' + self.server + url
-        if self.debug:
-            print('DELETE |%s|' % (fullurl))
-
-        if self.id == 'sso':
-            self.curl.setopt(pycurl.URL, str(fullurl))
-            self.curl.setopt(pycurl.CUSTOMREQUEST, 'DELETE')
-            self.curl.perform()
-        else:
-            self.http_client.request("DELETE", url, headers=self.headers)
-
-        try:
-            res = json.loads(self.__response())
-            return res
-        except Exception as ex:
-            print('Error while making a DELETE request to %s. Exception: %s' % (fullurl, ex))
-            print(traceback.format_exc())
-            return None
-
-    # Generic methods for I/O
-    def __clear(self):
-        if self.id == 'sso':
-            self.output = cStringIO.StringIO()
-            self.curl.setopt(pycurl.WRITEFUNCTION, self.output.write)
-        else:
-            self.http_client.close()
-
-    def __response(self):
-        if self.id == 'sso':
-            response = self.output.getvalue()
-            self.__clear()
-            return response
-        else:
-            response = self.http_client.getresponse().read()
-            self.__clear()
-            return response
+    def __delete(self, url, parse_json=True):
+        return self.__http_request(url, 'DELETE', parse_json=parse_json)
 
     # McM methods
     def get(self, object_type, object_id=None, query='', method='get', page=-1):
@@ -224,49 +161,49 @@ class McM:
         method - action to be performed, such as get, migrate or inspect
         page - which page to be fetched. -1 means no paginantion, return all results
         """
+        object_type = object_type.strip()
         if object_id:
-            if self.debug:
-                print('Object ID provided, getting %s' % (object_id.strip()))
-
-            url = 'restapi/%s/%s/%s' % (object_type, method, object_id.strip())
-            res = self.__get(url)
-            if res:
-                return res['results']
-            else:
+            object_id = object_id.strip()
+            self.logger.debug('Object ID %s provided, method is %s, database %s',
+                              object_id,
+                              method,
+                              object_type)
+            url = 'restapi/%s/%s/%s' % (object_type, method, object_id)
+            result = self.__get(url).get('results')
+            if not result:
                 return None
-        else:
+
+            return result
+        elif query:
             if page != -1:
-                if self.debug:
-                    print('Fetching %s page of %s for query %s' % (page, object_type, query))
-
-                url = 'search/?db_name=%s&page=%d&%s' % (object_type, page, query)
-                res = self.__get(url)
-                if res:
-                    return res["results"]
-                else:
-                    return None
+                self.logger.debug('Fetching page %s of %s for query %s',
+                                  page,
+                                  object_type,
+                                  query)
+                url = 'search/?db_name=%s&limit=50&page=%d&%s' % (object_type, page, query)
+                results = self.__get(url).get('results', [])
+                self.logger.debug('Found %s %s in page %s for query %s',
+                                  len(results),
+                                  object_type,
+                                  page,
+                                  query)
+                return results
             else:
-                if self.debug:
-                    print('No page provided, will use pagination to build the response list')
-
-                res_page = [{}]
-                res = []
+                self.logger.debug('Page not given, will use pagination to build response')
+                page_results = [{}]
+                results = []
                 page = 0
-                while len(res_page) != 0:
-                    res_page = self.get(object_type=object_type, query=query, method=method, page=page)
-                    if res_page:
-                        res += res_page
-                        if self.debug:
-                            print('Found %s %s in page %s. Total results: %s' % (len(res_page), object_type, page, len(res)))
+                while page_results:
+                    page_results = self.get(object_type=object_type,
+                                            query=query,
+                                            method=method,
+                                            page=page)
+                    results += page_results
+                    page += 1
 
-                        page += 1
-                    else:
-                        break
-
-                if res:
-                    return res
-                else:
-                    return None
+                return results
+        else:
+            self.logger.error('Neither object ID, nor query is given, doing nothing...')
 
     def update(self, object_type, object_data):
         """
@@ -300,10 +237,7 @@ class McM:
 
     def get_range_of_requests(self, query):
         res = self.__put('restapi/requests/listwithfile', data={'contents': query})
-        if res:
-            return res["results"]
-        else:
-            return None
+        return res.get('results', None)
 
     def delete(self, object_type, object_id):
         url = 'restapi/%s/delete/%s' % (object_type, object_id)
@@ -314,7 +248,4 @@ class McM:
         Forceflow a chained request with given prepid
         """
         res = self.__get('restapi/chained_requests/flow/%s/force' % (prepid))
-        if res:
-            return res["results"]
-        else:
-            return None
+        return res.get('results', None)
