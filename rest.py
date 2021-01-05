@@ -103,10 +103,10 @@ class McM:
         self.logger.debug('[%s] %s', method, url)
         headers = {'User-Agent': 'McM Scripting'}
         if data:
-            data = json.dumps(data)
+            data = json.dumps(data).encode('utf-8')
             headers['Content-type'] = 'application/json'
 
-        request = MethodRequest(url, data=data, headers=headers, method='GET')
+        request = MethodRequest(url, data=data, headers=headers, method=method)
         retries = 0
         response = None
         while retries < self.max_retries:
