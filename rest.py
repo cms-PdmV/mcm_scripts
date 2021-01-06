@@ -7,13 +7,15 @@ import time
 
 try:
     import cookielib
-except:
+except ImportError:
     import http.cookiejar as cookielib
 
 try:
     import urllib2 as urllib
-except:
+    from urllib2 import HTTPError as HTTPError
+except ImportError:
     import urllib.request as urllib
+    from urllib.error import HTTPError as HTTPError
 
 
 class MethodRequest(urllib.Request):
@@ -106,10 +108,10 @@ class McM:
             data = json.dumps(data).encode('utf-8')
             headers['Content-type'] = 'application/json'
 
-        request = MethodRequest(url, data=data, headers=headers, method=method)
         retries = 0
         response = None
         while retries < self.max_retries:
+            request = MethodRequest(url, data=data, headers=headers, method=method)
             try:
                 retries += 1
                 response = self.opener.open(request)
@@ -121,7 +123,11 @@ class McM:
                 else:
                     return response
 
-            except ValueError:
+            except (ValueError, HTTPError) as some_error:
+                # If it is not 3xx, reraise the error
+                if isinstance(some_error, HTTPError) and not (300 <= some_error.code <= 399):
+                    raise some_error
+
                 wait_time = retries ** 3
                 if self.id == 'sso':
                     self.logger.warning('Most likely SSO cookie is expired, will remake it after %s seconds',
