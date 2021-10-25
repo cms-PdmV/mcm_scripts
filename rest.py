@@ -260,7 +260,7 @@ class McM:
         """
         Soft reset a request
         """
-        res = self.__get('restapi/requests/soft_reset/%s' % ('prepid'))
+        res = self.__get('restapi/requests/soft_reset/%s' % (prepid))
         return res.get('results', None)
     
     def ticket_generate(self, ticket_prepid):
