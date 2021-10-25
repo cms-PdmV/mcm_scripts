@@ -255,3 +255,56 @@ class McM:
         """
         res = self.__get('restapi/chained_requests/flow/%s/force' % (prepid))
         return res.get('results', None)
+
+    def soft_reset(self, prepid):
+        """
+        Soft reset a request
+        """
+        res = self.__get('restapi/requests/soft_reset/%s' % ('prepid'))
+        return res.get('results', None)
+    
+    def ticket_generate(self, ticket_prepid):
+        """
+        Generate chains for a ticket
+        """
+        res = self.__get('restapi/mccms/generate/%s' % (ticket_prepid))
+        return res.get('results', None)
+        
+    def ticket_generate_reserve(self, ticket_prepid):
+        """
+        Generate and reserve chains for a ticket
+        """
+        res = self.__get('restapi/mccms/generate/%s/reserve' % (ticket_prepid))
+        return res.get('results', None)
+    
+    def rewind(self, chained_request_prepid):
+        """
+        Rewind a chained request
+        """
+        res = self.__get('restapi/chained_requests/rewind/%s' % (chained_request_prepid))
+        return res.get('results', None)
+    
+    def flow(self, chained_request_prepid):
+        """
+        Flow a chained request
+        """
+        res = self.__get('restapi/chained_requests/flow/%s' % (chained_request_prepid))
+        return res.get('results', None)
+    
+    def root_requests_from_ticket(self, ticket_prepid):
+        """
+        Return list of all root (first ones in the chain) requests of a ticket
+        """
+        mccm = self.get('mccms', ticket_prepid)
+        query = ''
+        for root_request in mccm.get('requests', []):
+            if isinstance(root_request, str) or isinstance(root_request, unicode):
+                query += '%s\n' % (root_request)
+            elif isinstance(root_request, list):
+                # List always contains two elements - start and end of a range
+                query += '%s -> %s\n' % (root_request[0], root_request[1])
+            else:
+                self.logger.error('%s is of unsupported type %s', root_request, type(root_request))
+
+        requests = self.get_range_of_requests(query)
+        return requests
