@@ -255,7 +255,14 @@ class McM:
         """
         res = self.__get('restapi/chained_requests/flow/%s/force' % (prepid))
         return res.get('results', None)
-
+    
+    def reset(self, prepid):
+        """
+        Reset a request
+        """
+        res = self.__get('restapi/requests/reset/%s' % (prepid))
+        return res.get('results', None)
+    
     def soft_reset(self, prepid):
         """
         Soft reset a request
