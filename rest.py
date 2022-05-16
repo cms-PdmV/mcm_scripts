@@ -305,7 +305,7 @@ class McM:
         mccm = self.get('mccms', ticket_prepid)
         query = ''
         for root_request in mccm.get('requests', []):
-            if isinstance(root_request, str) or isinstance(root_request, unicode):
+            if isinstance(root_request, str):
                 query += '%s\n' % (root_request)
             elif isinstance(root_request, list):
                 # List always contains two elements - start and end of a range
