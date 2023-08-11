@@ -265,7 +265,14 @@ class McM:
         """
         res = self.__get('restapi/requests/soft_reset/%s' % (prepid))
         return res.get('results', None)
-    
+
+    def option_reset(self, prepid):
+        """
+        Option reset a request
+        """
+        res = self.__get('restapi/requests/option_reset/%s' % (prepid))
+        return res.get('results', None)
+
     def ticket_generate(self, ticket_prepid):
         """
         Generate chains for a ticket
