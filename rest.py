@@ -92,7 +92,7 @@ class McM:
 
     def __generate_cookie(self):
         # use env to have a clean environment
-        command = 'rm -f %s; env -i auth-get-sso-cookie -u %s -o %s' % (self.cookie, self.server, self.cookie)
+        command = 'rm -f %s; env -i KRB5CCNAME="$KRB5CCNAME" auth-get-sso-cookie -u %s -o %s' % (self.cookie, self.server, self.cookie)
         self.logger.debug(command)
         output = os.popen(command).read()
         self.logger.debug(output)
