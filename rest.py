@@ -34,13 +34,11 @@ class MethodRequest(urllib.Request):
 
 
 class McM:
-    def __init__(self, id='sso', debug=False, cookie=None, dev=True, int=False):
+    def __init__(self, id='sso', debug=False, cookie=None, dev=True):
         if dev:
-            self.host = 'cms-pdmv-dev.cern.ch'
-        elif int:
-            self.host = 'cms-pdmv-int.cern.ch'
+            self.host = 'cms-pdmv-dev.web.cern.ch'
         else:
-            self.host = 'cms-pdmv.cern.ch'
+            self.host = 'cms-pdmv-prod.web.cern.ch'
 
         self.dev = dev
         self.server = 'https://' + self.host + '/mcm/'
@@ -57,8 +55,6 @@ class McM:
             home = os.getenv('HOME')
             if dev:
                 self.cookie = '%s/private/mcm-dev-cookie.txt' % (home)
-            elif int:
-                self.cookie = '%s/private/mcm-int-cookie.txt' % (home)
             else:
                 self.cookie = '%s/private/mcm-prod-cookie.txt' % (home)
 
