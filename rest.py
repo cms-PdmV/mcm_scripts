@@ -34,13 +34,11 @@ class MethodRequest(urllib.Request):
 
 
 class McM:
-    def __init__(self, id='sso', debug=False, cookie=None, dev=True, int=False):
+    def __init__(self, id='sso', debug=False, cookie=None, dev=True):
         if dev:
-            self.host = 'cms-pdmv-dev.cern.ch'
-        elif int:
-            self.host = 'cms-pdmv-int.cern.ch'
+            self.host = 'cms-pdmv-dev.web.cern.ch'
         else:
-            self.host = 'cms-pdmv.cern.ch'
+            self.host = 'cms-pdmv-prod.web.cern.ch'
 
         self.dev = dev
         self.server = 'https://' + self.host + '/mcm/'
@@ -57,8 +55,6 @@ class McM:
             home = os.getenv('HOME')
             if dev:
                 self.cookie = '%s/private/mcm-dev-cookie.txt' % (home)
-            elif int:
-                self.cookie = '%s/private/mcm-int-cookie.txt' % (home)
             else:
                 self.cookie = '%s/private/mcm-prod-cookie.txt' % (home)
 
@@ -92,7 +88,7 @@ class McM:
 
     def __generate_cookie(self):
         # use env to have a clean environment
-        command = 'rm -f %s; env -i KRB5CCNAME="$KRB5CCNAME" cern-get-sso-cookie -u %s -o %s --reprocess --krb' % (self.cookie, self.server, self.cookie)
+        command = 'rm -f %s; env -i KRB5CCNAME="$KRB5CCNAME" auth-get-sso-cookie -u %s -o %s' % (self.cookie, self.server, self.cookie)
         self.logger.debug(command)
         output = os.popen(command).read()
         self.logger.debug(output)
@@ -269,7 +265,14 @@ class McM:
         """
         res = self.__get('restapi/requests/soft_reset/%s' % (prepid))
         return res.get('results', None)
-    
+
+    def option_reset(self, prepid):
+        """
+        Option reset a request
+        """
+        res = self.__get('restapi/requests/option_reset/%s' % (prepid))
+        return res.get('results', None)
+
     def ticket_generate(self, ticket_prepid):
         """
         Generate chains for a ticket
