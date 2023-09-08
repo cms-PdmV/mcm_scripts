@@ -1,6 +1,9 @@
+import base64
+import datetime
 import sys
 import os
 import json
+import subprocess
 import traceback
 import logging
 import time
@@ -34,6 +37,19 @@ class MethodRequest(urllib.Request):
 
 
 class McM:
+    """
+    Initializes the API.
+
+    Arguments:
+        id: The authentication mechanism to use. Supported values are 'sso' to
+            use auth-get-sso-cookie, 'oidc' for Keycloak-based authentication
+            ("new SSO").  Any other value results in no authentication being
+            used.
+        debug: Controls the amount of logging printed to the terminal.
+        cookie: The path of a cookie JAR in Netscape format, to be used for
+            authentication.
+        dev: Whether to use the dev or production McM instance (default: dev).
+    """
     def __init__(self, id='sso', debug=False, cookie=None, dev=True):
         if dev:
             self.host = 'cms-pdmv-dev.web.cern.ch'
@@ -57,6 +73,11 @@ class McM:
                 self.cookie = '%s/private/mcm-dev-cookie.txt' % (home)
             else:
                 self.cookie = '%s/private/mcm-prod-cookie.txt' % (home)
+
+        if id == 'oidc':
+            home = os.getenv('HOME')
+            self.token_file = '%s/private/mcm-token.json' % home
+            self.token = None
 
         # Set up logging
         logging.basicConfig(format='[%(asctime)s][%(levelname)s] %(message)s', level=logging_level)
@@ -83,6 +104,16 @@ class McM:
                 self.logger.debug('Cookie %s', cookie)
 
             self.opener = urllib.build_opener(urllib.HTTPCookieProcessor(cookie_jar))
+        elif self.id == 'oidc':
+            try:
+                self._decode_oidc_token()
+            except:
+                self._generate_oidc_token()
+                try:
+                    self._decode_oidc_token()
+                except (OSError, ValueError) as e:
+                    self.logger.error('Could not get a token')
+            self.opener = urllib.build_opener()
         else:
             self.opener = urllib.build_opener()
 
@@ -94,6 +125,42 @@ class McM:
         self.logger.debug(output)
         if not os.path.isfile(self.cookie):
             self.logger.error('Could not generate SSO cookie.\n%s', output)
+
+
+    def _generate_oidc_token(self):
+        if os.path.isfile(self.token_file):
+            # TODO check validity of existing tokens, refresh if possible
+            os.remove(self.token_file)
+
+        # Start counting the validity period before getting the token, so we
+        # always refresh in time
+        validity_start = datetime.datetime.now()  
+
+        subprocess.run(['auth-get-user-token', '-c', 'mcm_scripts',
+                        '-o', self.token_file],
+                       check=True)
+
+        # Add some useful information to the file
+        with open(self.token_file, encoding='utf-8') as stream:
+            data = json.load(stream)
+        expires = data['expires_in']
+        refresh = data['refresh_expires_in']
+        data['valid-until'] = (validity_start + datetime.timedelta(seconds=expires)).isoformat()
+        data['refresh-until'] = (validity_start + datetime.timedelta(seconds=refresh)).isoformat()
+        with open(self.token_file, 'w', encoding='utf-8') as stream:
+            json.dump(data, stream)
+
+        self.token = data['access_token']
+
+
+    def _decode_oidc_token(self):
+        # Get the access token
+        with open(self.token_file, encoding='utf-8') as stream:
+            data = json.load(stream)
+            token = data['access_token']
+            print(data['valid-until'])
+            print(data['refresh_expires_in'])
+
 
     # Generic methods for GET, PUT, DELETE HTTP methods
     def __http_request(self, url, method, data=None, parse_json=True):
@@ -108,11 +175,16 @@ class McM:
         response = None
         while retries < self.max_retries:
             request = MethodRequest(url, data=data, headers=headers, method=method)
+
+            if self.id == 'oidc':
+                request.add_header('authorization', 'Bearer %s' % self.token)
+
             try:
                 retries += 1
                 response = self.opener.open(request)
                 response = response.read()
                 response = response.decode('utf-8')
+                print(response)
                 self.logger.debug('Response from %s length %s', url, len(response))
                 if parse_json:
                     return json.loads(response)
