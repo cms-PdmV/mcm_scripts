@@ -88,7 +88,7 @@ class McM:
         self.logger = logging.getLogger()
 
         # Request retries
-        self.max_retries = 1
+        self.max_retries = 3
         
         # Create opener
         # Set a default opener to perform requests and change it 
@@ -205,6 +205,10 @@ class McM:
         return id_token
 
     def __connect(self):
+        """
+        Verifies, retrieves or requests a valid credential to authenticate the user actions in
+        McM. This handles the request for session cookies or ID tokens for sending them to the server.
+        """
         if self.id == McM.SSO:
             if not os.path.isfile(self.cookie):
                 self.logger.info('SSO cookie file is absent. Will try to make one for you...')
@@ -234,6 +238,10 @@ class McM:
 
 
     def __generate_cookie(self):
+        """
+        Request a session cookie by using the package `auth-get-sso-cookie` and Kerberos
+        credentials.
+        """
         # use env to have a clean environment
         command = 'rm -f %s; REQUESTS_CA_BUNDLE="/etc/pki/tls/certs/ca-bundle.trust.crt"; auth-get-sso-cookie -u %s -o %s' % (self.cookie, self.server, self.cookie)
         self.logger.debug(command)
@@ -289,7 +297,7 @@ class McM:
         response = None
         while retries < self.max_retries:
             request = MethodRequest(url, data=data, headers=headers, method=method)
-            if self.id == 'oidc' and hasattr(self, "token"):
+            if self.id == McM.OIDC and hasattr(self, "token"):
                 request.add_header('Authorization', 'Bearer %s' % self.token)
             try:
                 retries += 1
@@ -318,7 +326,7 @@ class McM:
                         raise some_error
 
                 wait_time = retries ** 3
-                if self.id == 'sso':
+                if self.id == McM.SSO:
                     self.logger.warning(
                         'Your session cookie seems to be expired, will remake it after %s seconds',
                         wait_time
@@ -326,9 +334,10 @@ class McM:
                     time.sleep(wait_time)
                     self.__generate_cookie()
                     self.__connect()
-                elif self.id == 'oidc':
+                elif self.id == McM.OIDC:
                     self.logger.warning('Your ID token seems to be expired, the interactive flow will start again')
-                    self.__connect()                    
+                    self.__connect()
+                    request.add_header('Authorization', 'Bearer %s' % self.token)
                 else:
                     self.logger.warning('Error getting response, will retry after %s seconds', wait_time)
                     time.sleep(wait_time)
