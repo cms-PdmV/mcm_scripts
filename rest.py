@@ -1,13 +1,13 @@
-import base64
 import datetime
 import sys
 import os
 import json
 import subprocess
-import traceback
 import logging
 import time
 
+# Support for Python 2.7 and Python 3
+# Some McM modules still use Python 2.7
 try:
     import cookielib
 except ImportError:
@@ -16,7 +16,9 @@ except ImportError:
 try:
     import urllib2 as urllib
     from urllib2 import HTTPError as HTTPError
+    from urllib import urlencode
 except ImportError:
+    from urllib.parse import urlencode
     import urllib.request as urllib
     from urllib.error import HTTPError as HTTPError
 
@@ -34,7 +36,7 @@ class MethodRequest(urllib.Request):
             return self._method
 
         return urllib.Request.get_method(self, *args, **kwargs)
-
+    
 
 class McM:
     """
@@ -42,15 +44,21 @@ class McM:
 
     Arguments:
         id: The authentication mechanism to use. Supported values are 'sso' to
-            use auth-get-sso-cookie, 'oidc' for Keycloak-based authentication
-            ("new SSO").  Any other value results in no authentication being
+            use auth-get-sso-cookie, 'oidc' for OIDC authentication
+            ("new SSO"). Any other value results in no authentication being
             used.
         debug: Controls the amount of logging printed to the terminal.
         cookie: The path of a cookie JAR in Netscape format, to be used for
             authentication.
         dev: Whether to use the dev or production McM instance (default: dev).
     """
-    def __init__(self, id='sso', debug=False, cookie=None, dev=True):
+    SSO = 'sso'
+    OIDC = 'oidc'
+    CERN_OIDC_API = 'https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/'
+    OIDC_DEVICE_ENDPOINT = 'auth/device'
+    OIDC_TOKEN_ENDPOINT = 'token'
+
+    def __init__(self, id=SSO, debug=False, cookie=None, dev=True):
         if dev:
             self.host = 'cms-pdmv-dev.web.cern.ch'
         else:
@@ -59,6 +67,7 @@ class McM:
         self.dev = dev
         self.server = 'https://' + self.host + '/mcm/'
         self.id = id
+
         # Set up logging
         if debug:
             logging_level = logging.DEBUG
@@ -74,21 +83,129 @@ class McM:
             else:
                 self.cookie = '%s/private/mcm-prod-cookie.txt' % (home)
 
-        if id == 'oidc':
-            home = os.getenv('HOME')
-            self.token_file = '%s/private/mcm-token.json' % home
-            self.token = None
-
         # Set up logging
         logging.basicConfig(format='[%(asctime)s][%(levelname)s] %(message)s', level=logging_level)
         self.logger = logging.getLogger()
-        # Create opener
-        self.__connect()
+
         # Request retries
-        self.max_retries = 3
+        self.max_retries = 1
+        
+        # Create opener
+        # Set a default opener to perform requests and change it 
+        # when a cookie is available.
+        self.opener = urllib.build_opener()
+        self.__connect()
+
+    def __verify_credential(self):
+        """
+        Send a HTTP request to a protected endpoint in McM to check
+        if the provided credential is valid.
+
+        Returns:
+            bool: True if the credential is valid, False otherwise.
+
+        Raises:
+            HTTPError: If the HTTP response has a status code different that 200 or 3XX
+        """
+        def __help_message__():
+            """
+            Logs some messages to give advice to the user if the authentication
+            process failed.
+            """
+            self.logger.error('Verifying credential: HTTP response has a 3XX status code')
+            self.logger.error('The provided credential is not valid')
+            self.logger.info('Authentication mechanism: %s' % self.id)
+            if self.id == McM.SSO:
+                self.logger.info('Please remember that, if you have enabled 2FA, it is not possible to request')
+                self.logger.info('session cookies. Please use the authentication mechanism "oidc" for using this client')
+
+        # Use the index page
+        protected_resource = ''
+        authentication_required = McM.CERN_OIDC_API + 'auth'
+        try:
+            self.logger.debug('Verifying credential by consuming a resource in McM')
+            response = self.__http_request(protected_resource, 'GET', parse_json=False, raise_on_redirection=True, raw_response=True)
+            if response.url.startswith(authentication_required):
+                __help_message__()
+                return False
+            return True
+        except HTTPError as some_error:
+            if (300 <= some_error.code <= 399):
+                __help_message__()
+                return False
+            raise some_error
+
+    def __request_token(self):
+        """
+        Request an ID token to the IdP server to authenticate the user.
+        This authentication method requires human interaction to complete the flow.
+
+        Returns:
+            str: ID token to authenticate user requests.
+            None: If there is an error requesting the token.
+        """
+        client_id = 'cms-ppd-pdmv-dev' if self.dev else 'cms-ppd-pdmv'
+        client_secret = os.getenv('MCM_CLIENT_SECRET')
+        data = {'client_id': client_id}
+        if client_secret:
+            data['client_secret'] = client_secret
+
+        # Authorize the SDK to request a token
+        self.logger.info('Requesting ID token via Device Authorization Grant')
+        try:
+            device_code_response = self.__http_request(
+                McM.OIDC_DEVICE_ENDPOINT, 
+                'POST',
+                data=data, 
+                server=McM.CERN_OIDC_API, 
+                url_encoded=True
+            )
+        except HTTPError as http_error:
+            if http_error.code == 401:
+                self.logger.info('Please make sure the application: %s is configured as a public client' % client_id)
+                self.logger.info('Otherwise, provide the client_secret')
+            raise http_error
+
+        device_code = device_code_response['device_code']
+        verification_uri_complete = device_code_response['verification_uri_complete']
+
+        self.logger.info('Please go to the following link and complete the authentication flow: ')
+        self.logger.info(verification_uri_complete)
+
+        try:
+            input('Press Enter once you have authenticated...')
+        except SyntaxError:
+            # Python 2 tries to parse the value and raises an error
+            # Just supress it 
+            pass
+
+        # Retrieve the ID token
+        data = {
+            'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
+            'device_code': device_code,
+            'client_id': client_id
+        }
+        if client_secret:
+            data['client_secret'] = client_secret
+
+        try:
+            device_completion_response = self.__http_request(
+                McM.OIDC_TOKEN_ENDPOINT,
+                'POST',
+                data=data,
+                server=McM.CERN_OIDC_API,
+                url_encoded=True
+            )
+        except HTTPError as http_error:
+            if http_error.code == 400:
+                self.logger.info('Did you complete the authentication flow before pressing "Enter" right?')
+            raise http_error
+
+        id_token = device_completion_response.get('access_token')
+        return id_token
 
     def __connect(self):
-        if self.id == 'sso':
+        if self.id == McM.SSO:
             if not os.path.isfile(self.cookie):
                 self.logger.info('SSO cookie file is absent. Will try to make one for you...')
                 self.__generate_cookie()
@@ -102,24 +219,23 @@ class McM:
             cookie_jar.load()
             for cookie in cookie_jar:
                 self.logger.debug('Cookie %s', cookie)
-
             self.opener = urllib.build_opener(urllib.HTTPCookieProcessor(cookie_jar))
-        elif self.id == 'oidc':
-            try:
-                self._decode_oidc_token()
-            except:
-                self._generate_oidc_token()
-                try:
-                    self._decode_oidc_token()
-                except (OSError, ValueError) as e:
-                    self.logger.error('Could not get a token')
+        elif self.id == McM.OIDC:
+            self.token = self.__request_token()
             self.opener = urllib.build_opener()
         else:
             self.opener = urllib.build_opener()
 
+        # Verify the credential before allow the user to perform further requests
+        valid_credential = self.__verify_credential()
+        if not valid_credential:
+            self.logger.error('Available credential is not valid, closing client')
+            sys.exit(1)
+
+
     def __generate_cookie(self):
         # use env to have a clean environment
-        command = 'rm -f %s; env -i KRB5CCNAME="$KRB5CCNAME" auth-get-sso-cookie -u %s -o %s' % (self.cookie, self.server, self.cookie)
+        command = 'rm -f %s; REQUESTS_CA_BUNDLE="/etc/pki/tls/certs/ca-bundle.trust.crt"; auth-get-sso-cookie -u %s -o %s' % (self.cookie, self.server, self.cookie)
         self.logger.debug(command)
         output = os.popen(command).read()
         self.logger.debug(output)
@@ -127,64 +243,66 @@ class McM:
             self.logger.error('Could not generate SSO cookie.\n%s', output)
 
 
-    def _generate_oidc_token(self):
-        if os.path.isfile(self.token_file):
-            # TODO check validity of existing tokens, refresh if possible
-            os.remove(self.token_file)
-
-        # Start counting the validity period before getting the token, so we
-        # always refresh in time
-        validity_start = datetime.datetime.now()  
-
-        subprocess.run(['auth-get-user-token', '-c', 'mcm_scripts',
-                        '-o', self.token_file],
-                       check=True)
-
-        # Add some useful information to the file
-        with open(self.token_file, encoding='utf-8') as stream:
-            data = json.load(stream)
-        expires = data['expires_in']
-        refresh = data['refresh_expires_in']
-        data['valid-until'] = (validity_start + datetime.timedelta(seconds=expires)).isoformat()
-        data['refresh-until'] = (validity_start + datetime.timedelta(seconds=refresh)).isoformat()
-        with open(self.token_file, 'w', encoding='utf-8') as stream:
-            json.dump(data, stream)
-
-        self.token = data['access_token']
-
-
-    def _decode_oidc_token(self):
-        # Get the access token
-        with open(self.token_file, encoding='utf-8') as stream:
-            data = json.load(stream)
-            token = data['access_token']
-            print(data['valid-until'])
-            print(data['refresh_expires_in'])
-
-
     # Generic methods for GET, PUT, DELETE HTTP methods
-    def __http_request(self, url, method, data=None, parse_json=True):
-        url = self.server + url
+    def __http_request(
+            self, 
+            url, 
+            method, 
+            data=None, 
+            parse_json=True, 
+            server=None,
+            url_encoded=False,
+            raise_on_redirection=False,
+            raw_response=False
+        ):
+        """
+        Performs an HTTP request to the server to consume the desired resource.
+
+        Args:
+            url (str): Resource to consume in the web server
+            method (str): HTTP request method
+            data (dict): Data to include in the HTTP request
+            parse_json (bool): Parse the HTTP response content as a dict.
+            server(str | None): If provided, this overwrites the domain name
+                set by the server attribute
+            url_encoded (bool): Parse the data argument to be used in x-www-form-urlencoded
+                requests
+            raise_on_redirection (bool): Instead of retrying an HTTP request renewing the credentials
+                if its required, it will raise the HTTP 3XX response as an exception.
+            raw_response (bool): Returns the HTTP response with all its attributes.
+        Returns:
+            dict | str | None: HTTP Response
+        """
+        domain = server if server else self.server
+        url = domain + url
         self.logger.debug('[%s] %s', method, url)
         headers = {'User-Agent': 'McM Scripting'}
         if data:
-            data = json.dumps(data).encode('utf-8')
-            headers['Content-type'] = 'application/json'
+            if url_encoded:
+                data = urlencode(data).encode('utf-8')
+                headers['Content-type'] = 'application/x-www-form-urlencoded'
+            else:
+                data = json.dumps(data).encode('utf-8')
+                headers['Content-type'] = 'application/json'
 
         retries = 0
         response = None
         while retries < self.max_retries:
             request = MethodRequest(url, data=data, headers=headers, method=method)
-
-            if self.id == 'oidc':
-                request.add_header('authorization', 'Bearer %s' % self.token)
-
+            if self.id == 'oidc' and hasattr(self, "token"):
+                request.add_header('Authorization', 'Bearer %s' % self.token)
             try:
                 retries += 1
                 response = self.opener.open(request)
+                
+                # Return the HTTP response with all its attributes
+                if raw_response:
+                    return response
+                
+                # Return the HTTP response body
                 response = response.read()
                 response = response.decode('utf-8')
-                print(response)
+                self.logger.debug(response)
                 self.logger.debug('Response from %s length %s', url, len(response))
                 if parse_json:
                     return json.loads(response)
@@ -192,17 +310,25 @@ class McM:
                     return response
 
             except (ValueError, HTTPError) as some_error:
-                # If it is not 3xx, reraise the error
-                if isinstance(some_error, HTTPError) and not (300 <= some_error.code <= 399):
-                    raise some_error
+                if isinstance(some_error, HTTPError):
+                    if (300 <= some_error.code <= 399):
+                        if raise_on_redirection:
+                            raise some_error
+                    else:
+                        raise some_error
 
                 wait_time = retries ** 3
                 if self.id == 'sso':
-                    self.logger.warning('Most likely SSO cookie is expired, will remake it after %s seconds',
-                                        wait_time)
+                    self.logger.warning(
+                        'Your session cookie seems to be expired, will remake it after %s seconds',
+                        wait_time
+                    )
                     time.sleep(wait_time)
                     self.__generate_cookie()
                     self.__connect()
+                elif self.id == 'oidc':
+                    self.logger.warning('Your ID token seems to be expired, the interactive flow will start again')
+                    self.__connect()                    
                 else:
                     self.logger.warning('Error getting response, will retry after %s seconds', wait_time)
                     time.sleep(wait_time)
