@@ -1,8 +1,6 @@
-import datetime
 import sys
 import os
 import json
-import subprocess
 import logging
 import time
 
@@ -95,6 +93,37 @@ class McM:
         # when a cookie is available.
         self.opener = urllib.build_opener()
         self.__connect()
+
+        # Give advice about Python version
+        self.__check_python_version()
+
+
+    def __check_python_version(self):
+        """
+        Raise some warning messages if the interpreter Python version
+        has reached its end of life.
+        """
+        current_version = sys.version_info
+        if (2, 7, 0) <= current_version < (3, 0, 0):
+            self.logger.critical(
+                (
+                    'Python 2.X is deprecated since January 1, 2020.\n'
+                    'Please consider to update to the latest Python version or '
+                    'at least one that its still maintaned.\n'
+                    'PdmV will drop Python 2.X support in the near future, hopefully, '
+                    'before the end of December 2024.'
+                    '\n'
+                )
+            )
+        elif (3, 0) <= current_version <= (3, 10):
+            self.logger.warning(
+                (
+                    'Python 3.X version currently used has reached its end of life '
+                    'or it will reach it in the near future.\n'
+                    'Please consider to use a newer version. '
+                    'Python version: %s \n' % sys.version
+                )
+            )
 
     def __verify_credential(self):
         """
