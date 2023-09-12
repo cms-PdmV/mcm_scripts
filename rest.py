@@ -1,3 +1,4 @@
+import subprocess
 import sys
 import os
 import json
@@ -272,9 +273,16 @@ class McM:
         credentials.
         """
         # use env to have a clean environment
+        current_version = sys.version_info
         command = 'rm -f %s; REQUESTS_CA_BUNDLE="/etc/pki/tls/certs/ca-bundle.trust.crt"; auth-get-sso-cookie -u %s -o %s' % (self.cookie, self.server, self.cookie)
         self.logger.debug(command)
-        output = os.popen(command).read()
+        if (3, 6, 0) <= current_version:
+            # Use subprocess.run() to execute the command and avoid
+            # leaking resources.
+            output = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE)
+        else:
+            output = os.popen(command).read()
+            
         self.logger.debug(output)
         if not os.path.isfile(self.cookie):
             self.logger.error('Could not generate SSO cookie.\n%s', output)
