@@ -107,9 +107,9 @@ class McM:
         if (2, 7, 0) <= current_version < (3, 0, 0):
             self.logger.critical(
                 (
-                    'Python 2.X is deprecated since January 1, 2020.\n'
-                    'Please consider to update to the latest Python version or '
-                    'at least one that its still maintaned.\n'
+                    'Python 2.X has been deprecated since January 1, 2020.\n'
+                    'Please consider updating to the latest Python version or '
+                    'at least one that is still maintained.\n'
                     'PdmV will drop Python 2.X support in the near future, hopefully, '
                     'before the end of December 2024.'
                     '\n'
@@ -120,7 +120,7 @@ class McM:
                 (
                     'Python 3.X version currently used has reached its end of life '
                     'or it will reach it in the near future.\n'
-                    'Please consider to use a newer version. '
+                    'Please consider using a newer version. '
                     'Python version: %s \n' % sys.version
                 )
             )
