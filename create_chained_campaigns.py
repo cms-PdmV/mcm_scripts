@@ -18,6 +18,10 @@ REMOVAL_ORDER: List[str] = [
 ]
 
 logger: logging.Logger = logging.getLogger(name=__name__)
+formatter = logging.Formatter('[%(asctime)s][%(levelname)s] %(message)s')
+fh: logging.Handler = logging.FileHandler('execution.log')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 # If you want more messages, enable the DEBUG mode
 # logger.setLevel(level=logging.DEBUG)
 
@@ -86,10 +90,12 @@ def create_chained_campaign(
         logger.info(response)
     else:
         logger.info('Chained campaign to be created')
-        pprint.pprint(
-            chained_campaign, 
-            width=50,
-            compact=True
+        logger.info(
+            pprint.pformat(
+                chained_campaign, 
+                width=50,
+                compact=True
+            )
         )
         
 
