@@ -73,6 +73,9 @@ def create_chained_campaign(
     # Include the new section for the chain_campaign
     logger.debug('Including the following chain section: %s', new_chain_section)
     chained_campaign['campaigns'] += new_chain_section
+
+    # Set the attribute `do_not_check_cmssw_versions` to `True`
+    chained_campaign['do_not_check_cmssw_versions'] = True
     
     for campaign, flow in chained_campaign['campaigns']:
         logger.info(
