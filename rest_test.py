@@ -138,8 +138,6 @@ class IDToken(BaseTest):
     """
     def setUp(self):
         super(IDToken, self).setUp()
-        # Set the CLIENT_SECRET for development environment
-        os.environ["MCM_CLIENT_SECRET"] = os.getenv("DEV_MCM_CLIENT_SECRET")
         self.mcm = McM(McM.OIDC, dev=True)
 
 
@@ -152,12 +150,11 @@ class IDTokenExpiredDevelopment(BaseTest):
     """
     def setUp(self):
         super(IDTokenExpiredDevelopment, self).setUp()
-        # Set the CLIENT_SECRET for development environment
-        os.environ["MCM_CLIENT_SECRET"] = os.getenv("DEV_MCM_CLIENT_SECRET")
         self.mcm = McM(McM.OIDC, dev=True)
         # Set an invalid JWT token before doing the request.
         # Token retrieved from: https://jwt.io/
         # Default 'John Doe' token
+        logging.info('Setting an invalid token to test token refresh')
         invalid_token = (
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
             "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ."

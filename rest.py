@@ -174,7 +174,7 @@ class McM:
             str: ID token to authenticate user requests.
             None: If there is an error requesting the token.
         """
-        client_id = 'cms-ppd-pdmv-dev' if self.dev else 'cms-ppd-pdmv'
+        client_id = 'cms-ppd-pdmv-device-flow'
         client_secret = os.getenv('MCM_CLIENT_SECRET')
         data = {'client_id': client_id}
         if client_secret:
