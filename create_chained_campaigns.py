@@ -332,7 +332,7 @@ def create_mccm_tickets(
 
         if create_tickets:
             logger.info('Creating ticket ....')
-            res = mcm.put('mccms', mccm_ticket)
+            res = mcm.put('mccms', ticket)
             logger.info('Transaction result: %s', res)
             submission_result.append(res)
             time.sleep(1) # Avoid killing McM application
