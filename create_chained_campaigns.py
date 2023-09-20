@@ -259,8 +259,9 @@ def create_mccm_tickets(
             chain_campaigns: Set[str]
         ) -> str:
         """
-        Verifies and checks that the new chain_campaign already exists before
-        including it in the ticket.
+        Verifies and checks that the new `chain_campaign` already exists before
+        including it in the ticket. Returns a blank string if the `chain_campaign`
+        is not related with the desired MiniAOD and NanoAOD campaigns.
         """
         related_to_ee: bool = belongs_to_ee.match(chain_campaign_group)
         expected_ch_c: str = ''
@@ -271,8 +272,17 @@ def create_mccm_tickets(
 
         is_already_created: bool = expected_ch_c in chain_campaigns
         if not is_already_created:
-            logger.error('Chain campaign: %s should already exist', expected_ch_c)
-            return f'{chain_campaign_group}_<NotExists>'
+            logger.warning(
+                (
+                    'Chain campaign: %s does not exist. It means is is not related with the desired MiniAOD and NanoAOD campaigns.\n'
+                    'Skip it.\n'
+                    'Chain campaign constructed based on: %s group key'
+                ), 
+                expected_ch_c,
+                chain_campaign_group
+            )
+            return ''
+        
         return expected_ch_c
         
 
@@ -305,6 +315,18 @@ def create_mccm_tickets(
             chain_campaign_group=chained_campaign, 
             chain_campaigns=chain_campaigns_set
         )
+        
+        if not new_chained_campaign:
+            # Avoid creating a ticket for this
+            logger.warning(
+                (
+                    'Skipping the following root requests due to are not related '
+                    'with desired MiniAOD and NanoAOD campaigns: %s'
+                ),
+                root_requests
+            )
+            continue
+
         for root_request_chunk in chunks(root_requests, 50):
             mccm_ticket: Dict = {
                 'prepid': 'PPD',
