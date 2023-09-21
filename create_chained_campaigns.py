@@ -207,6 +207,7 @@ def create_mccm_tickets(
         mcm: McM,
         root_requests: List[Dict], 
         chain_campaigns: List[str],
+        discard_chain_campaign: List[str],
         create_tickets: bool = False
     ) -> List[Dict]:
     """
@@ -218,12 +219,17 @@ def create_mccm_tickets(
         root_requests (list[dict]): Root request data object
         chain_campaigns (list[str]): List of all created `chain_campaing` to include in the
             new ticket.
+        discard_chain_campaign (list[str]): List of chain campaigns to avoid creating a ticket 
+            because they already exist and there are some requests already injected in production.
         create_tickets (bool): Create the tickets in McM
     
     Returns:
         List[dict]: List of all MccM ticket to include in McM or the result of submitting
             its creation to McM.
     """
+
+    discard_chain_campaign_set: Set[str] = set(discard_chain_campaign)
+
     def __retrieve_chain_campaign_id__(chain_request: str) -> str:
         """
         Retrieve the `chain_campaign` prepid for grouping several root request on it
@@ -327,6 +333,18 @@ def create_mccm_tickets(
             )
             continue
 
+        if new_chained_campaign in discard_chain_campaign_set:
+            logger.warning(
+                (
+                    'Skipping creating a ticket for the chain_campaign: %s.'
+                    'There are tickets and requests injected in production. \n'
+                    'Root requests skipped: %s'
+                ),
+                new_chained_campaign,
+                root_requests
+            )
+            continue
+
         for root_request_chunk in chunks(root_requests, 50):
             mccm_ticket: Dict = {
                 'prepid': 'PPD',
@@ -356,8 +374,14 @@ def create_mccm_tickets(
             logger.info('Creating ticket ....')
             res = mcm.put('mccms', ticket)
             logger.info('Transaction result: %s', res)
-            submission_result.append(res)
-            time.sleep(1) # Avoid killing McM application
+
+            # Reserve the ticket
+            logger.info('Reserving ticket ...')
+            ticket_prepid = res.get('prepid', None)
+            reserve = mcm._McM__get('restapi/mccms/generate/%s' % (ticket_prepid))
+            logger.info('Result: %s', reserve)
+            submission_result.append(reserve)
+            time.sleep(2) # Avoid killing McM application
 
     return submission_result if create_tickets else tickets
 
@@ -365,6 +389,12 @@ def create_mccm_tickets(
 if __name__ == '__main__':
     start_time: datetime.datetime = datetime.datetime.now()
     mcm: McM = McM(dev=True)
+
+    # Skip this chained champaigns for creating a ticket
+    skip_ch_campaigns_ticket: List[str] = [
+        'chain_Run3Summer22EEwmLHEGS_flowRun3Summer22EEDRPremix_flowRun3Summer22EEMiniAODv4_flowRun3Summer22EENanoAODv12',
+        'chain_Run3Summer22wmLHEGS_flowRun3Summer22DRPremix_flowRun3Summer22MiniAODv4_flowRun3Summer22NanoAODv12'
+    ]
 
     # Step 1: Create new `chain_campaigns` based on some that already
     # exists, changing the last campaigns and flow related to the data tiers
@@ -405,6 +435,7 @@ if __name__ == '__main__':
         mcm=mcm,
         root_requests=root_requests,
         chain_campaigns=created_ch_campaigns,
+        discard_chain_campaign=skip_ch_campaigns_ticket,
         create_tickets=True
     )
     end_time: datetime.datetime = datetime.datetime.now()
