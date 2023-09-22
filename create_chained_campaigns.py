@@ -7,6 +7,7 @@ import pprint
 import datetime
 import time
 import re
+from urllib.error import HTTPError
 from typing import List, Dict, Optional, Set
 from rest import McM
 
@@ -36,6 +37,17 @@ def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i:i + n]
+
+
+def pretty(obj: Dict) -> str:
+    """
+    Pretty print an object in console
+    """
+    return pprint.pformat(
+        obj, 
+        width=50,
+        compact=True
+    )
 
 
 def create_chained_campaign(
@@ -105,13 +117,7 @@ def create_chained_campaign(
         _ = chained_campaign.pop(el)
 
     logger.info('Chained campaign to be created')
-    logger.info(
-        pprint.pformat(
-            chained_campaign, 
-            width=50,
-            compact=True
-        )
-    )
+    logger.info(pretty(chained_campaign))
 
     if create:
         logger.info('Creating ....')
@@ -327,21 +333,26 @@ def create_mccm_tickets(
             logger.warning(
                 (
                     'Skipping the following root requests due to are not related '
-                    'with desired MiniAOD and NanoAOD campaigns: %s'
+                    'with desired MiniAOD and NanoAOD campaigns: \n'
+                    '%s \n'
+                    'Total: %s'
                 ),
-                root_requests
+                pretty(root_requests),
+                f'{len(root_requests):,}'
             )
             continue
 
         if new_chained_campaign in discard_chain_campaign_set:
             logger.warning(
                 (
-                    'Skipping creating a ticket for the chain_campaign: %s.'
+                    'Skipping creating a ticket for the chain_campaign: %s. '
                     'There are tickets and requests injected in production. \n'
-                    'Root requests skipped: %s'
+                    'Root requests skipped: %s \n'
+                    'Total: %s'
                 ),
                 new_chained_campaign,
-                root_requests
+                pretty(root_requests),
+                f'{len(root_requests):,}'
             )
             continue
 
@@ -362,33 +373,93 @@ def create_mccm_tickets(
 
     for idx, ticket in enumerate(tickets):
         logger.info('%d of %d - New ticket', idx, total_tickets)
-        logger.info(
-            pprint.pformat(
-                ticket, 
-                width=50,
-                compact=True
-            )
-        )
-
+        logger.debug(pretty(ticket))
         if create_tickets:
-            logger.info('Creating ticket ....')
-            res = mcm.put('mccms', ticket)
-            logger.info('Transaction result: %s', res)
+            start_time_ticket: datetime.datetime = datetime.datetime.now()
+            try:
+                logger.info('Creating ticket ....')
+                res = mcm.put('mccms', ticket)
+                logger.info('Transaction result: %s', res)
 
-            # Reserve the ticket
-            logger.info('Reserving ticket ...')
-            ticket_prepid = res.get('prepid', None)
-            reserve = mcm._McM__get('restapi/mccms/generate/%s' % (ticket_prepid))
-            logger.info('Result: %s', reserve)
-            submission_result.append(reserve)
-            time.sleep(2) # Avoid killing McM application
+                # Reserve the ticket
+                logger.info('Reserving ticket ...')
+                ticket_prepid = res.get('prepid', None)
+                _ = mcm._McM__get('restapi/mccms/generate/%s?reserve=true&skip_existing=true' % (ticket_prepid))
+
+                # Updating total events for the ticket
+                logger.info('Updating events ...')
+                _ = mcm._McM__get('restapi/mccms/update_total_events/%s' % (ticket_prepid))
+
+                # Retrieve ticket information
+                logger.info('Retriving ticket information ...')
+                ticket_info = mcm._McM__get('restapi/mccms/get/%s' % (ticket_prepid))
+                logger.debug(pretty(ticket_info))
+                submission_result.append(ticket_info)
+            except HTTPError as http_error:
+                logger.error(
+                    'Server error processing the current ticket - Index: %s',
+                    idx
+                )
+                logger.error(http_error, exc_info=True)
+            
+            finally:
+                end_time_ticket: datetime.datetime = datetime.datetime.now()
+                logger.info(
+                    'Elapsed time for processing the ticket: %s',
+                    end_time_ticket - start_time_ticket
+                )
+                time.sleep(2) # Avoid killing McM application
 
     return submission_result if create_tickets else tickets
+
+
+def print_summary(created_tickets: List[Dict]):
+    """
+    Print a little summary related to the ticket creation.
+    Display the number of total events linked to a ticket, its
+    generated_chains and the total number of events related to
+    this whole process
+    """
+    logger.info('....................................')
+    logger.info('Final summary')
+    logger.info('\n')
+
+    total_events: int = 0
+    total_created_tickets: int = len(created_tickets)
+
+    for idx, ticket in enumerate(created_tickets):
+        ticket_data = ticket.get('results', {})
+        ticket_prepid: str = ticket_data.get('prepid', '<InvalidData>')
+        ticket_total_events: int = int(ticket_data.get('total_events', 0))
+        generated_chains: Dict = ticket_data.get('generated_chains', {})
+        logger.info('Displaying summary for %s ticket of %s', idx, total_created_tickets)
+        logger.info(
+            (
+                'Ticket: %s \n'
+                'Total events for the ticket: %s \n'
+                'Generated chains: \n'
+                '%s'
+            ),
+            ticket_prepid,
+            f'{ticket_total_events:,}',
+            pretty(generated_chains)
+        )
+        total_events += ticket_total_events
+    
+    logger.info('....................................')
+    logger.info(
+        'Total number of events: %s - Scientific notation: %s',
+        f'{total_events:,}',
+        f'{total_events:E}',
+    )
 
 
 if __name__ == '__main__':
     start_time: datetime.datetime = datetime.datetime.now()
     mcm: McM = McM(dev=True)
+    
+    # Create all the elements
+    CREATE = True
 
     # Skip this chained champaigns for creating a ticket
     skip_ch_campaigns_ticket: List[str] = [
@@ -416,7 +487,7 @@ if __name__ == '__main__':
         mcm=mcm, 
         chain_campaign_queries=chain_campaigns,
         clean_chain_up_to=clean_chain_up_to,
-        create=True
+        create=CREATE
     )
     created_ch_campaigns: List[str] = retrieve_chain_campaign_prepid(
         mcm_ch_campaign_result=created_chain_campaigns,
@@ -431,12 +502,17 @@ if __name__ == '__main__':
     logger.info('Matching new chain_campaigns for %d root requests', len(root_requests))
 
     # Step 3: Create a McM tickets 
-    _ = create_mccm_tickets(
+    ticket_result = create_mccm_tickets(
         mcm=mcm,
         root_requests=root_requests,
         chain_campaigns=created_ch_campaigns,
         discard_chain_campaign=skip_ch_campaigns_ticket,
-        create_tickets=True
+        create_tickets=CREATE
     )
+
+    # Step 4: Print a summary if required
+    if CREATE:
+        print_summary(created_tickets=ticket_result)
+
     end_time: datetime.datetime = datetime.datetime.now()
     logger.info('Elapsed time: %s', end_time - start_time)
