@@ -370,20 +370,27 @@ def create_mccm_tickets(
 
     total_tickets: int = len(tickets)
     submission_result: List[Dict] = []
+    new_ticket_prepids: List[str] = []
 
-    for idx, ticket in enumerate(tickets):
-        logger.info('%d of %d - New ticket', idx, total_tickets)
-        logger.debug(pretty(ticket))
-        if create_tickets:
+    if create_tickets:
+        # Create the ticket
+        for idx, ticket in enumerate(tickets):
+            logger.debug(pretty(ticket))
+            logger.info('%d of %d - Creating new ticket', idx, total_tickets)
+            res = mcm.put('mccms', ticket)
+            ticket_prepid = res.get('prepid', None)
+            new_ticket_prepids.append(ticket_prepid)
+            logger.info('Transaction result: %s', res)
+        
+        # Generate and reserve the chains
+        new_ticket_prepids = [tk_prepid for tk_prepid in new_ticket_prepids if tk_prepid]
+        created_total_tickets: int = len(new_ticket_prepids)
+        for idx, ticket_prepid in enumerate(new_ticket_prepids):
+            logger.info('%d of %d - Operating ticket: %s', idx, created_total_tickets, ticket_prepid)
             start_time_ticket: datetime.datetime = datetime.datetime.now()
             try:
-                logger.info('Creating ticket ....')
-                res = mcm.put('mccms', ticket)
-                logger.info('Transaction result: %s', res)
-
                 # Reserve the ticket
                 logger.info('Reserving ticket ...')
-                ticket_prepid = res.get('prepid', None)
                 _ = mcm._McM__get('restapi/mccms/generate/%s?reserve=true&skip_existing=true' % (ticket_prepid))
 
                 # Updating total events for the ticket
@@ -401,7 +408,7 @@ def create_mccm_tickets(
                     idx
                 )
                 logger.error(http_error, exc_info=True)
-            
+                
             finally:
                 end_time_ticket: datetime.datetime = datetime.datetime.now()
                 logger.info(
@@ -462,10 +469,7 @@ if __name__ == '__main__':
     CREATE = True
 
     # Skip this chained champaigns for creating a ticket
-    skip_ch_campaigns_ticket: List[str] = [
-        'chain_Run3Summer22EEwmLHEGS_flowRun3Summer22EEDRPremix_flowRun3Summer22EEMiniAODv4_flowRun3Summer22EENanoAODv12',
-        'chain_Run3Summer22wmLHEGS_flowRun3Summer22DRPremix_flowRun3Summer22MiniAODv4_flowRun3Summer22NanoAODv12'
-    ]
+    skip_ch_campaigns_ticket: List[str] = []
 
     # Step 1: Create new `chain_campaigns` based on some that already
     # exists, changing the last campaigns and flow related to the data tiers
