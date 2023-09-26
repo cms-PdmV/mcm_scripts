@@ -32,6 +32,16 @@ logger.addHandler(fh)
 # Include some regex to check some constraints
 belongs_to_ee = re.compile(r'^chain_Run3Summer22EE')
 
+# Valid root requests and campaigns
+valid_requests_campaigns: str = r'Run3Summer[0-9]{2}(?!FS)'
+valid_root_requests_prefix: str = r'^[A-Z0-9]{3}'
+valid_root_requests: str = f'{valid_root_requests_prefix}-{valid_requests_campaigns}'
+valid_chain_campaigns: str = f'^chain_{valid_requests_campaigns}'
+
+# Regex validators
+ROOT_REQUEST_VALIDATOR = re.compile(valid_root_requests)
+CHAIN_CAMPAIGNS_VALIDATOR = re.compile(valid_chain_campaigns)
+
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -155,7 +165,9 @@ def create_chain_campaings(
     """
     results: List[Dict] = []
     for query_chain_campaign, replacement in chain_campaign_queries.items():
-        chains_to_change: dict = mcm.get('chained_campaigns', query=query_chain_campaign)
+        chains_to_change: List[Dict] = mcm.get('chained_campaigns', query=query_chain_campaign)
+        # Filter the chain campaigns to only process valid patterns
+        chains_to_change = [ch for ch in chains_to_change if CHAIN_CAMPAIGNS_VALIDATOR.match(ch.get('prepid', ''))]
         total_chains_to_change: int = len(chains_to_change)
         logger.info('Query: %s has returned %d chain request to check', query_chain_campaign, total_chains_to_change)
         for idx_campaign, chain_to_change in enumerate(chains_to_change):
@@ -503,6 +515,8 @@ if __name__ == '__main__':
     # Step 2: Retrieve the list of all root requests to link with the new chain_campaign
     root_requests_query: str = 'prepid=*Run3Summer22*GS*'
     root_requests: List[Dict] = mcm.get('requests', query=root_requests_query)
+    # Filter the root requests
+    root_requests = [root_req for root_req in root_requests if ROOT_REQUEST_VALIDATOR.match(root_req.get('prepid', ''))]
     logger.info('Matching new chain_campaigns for %d root requests', len(root_requests))
 
     # Step 3: Create a McM tickets 
