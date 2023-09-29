@@ -52,8 +52,9 @@ exact_miniaod_nanoaod_termination: str = (
 
 # Just the beginning
 just_root_section: str = (
-    '^chain_Run3Summer22([a-z|A-Z|0-9]*'
-    '(?!MiniAOD)[_]){1,2}'
+    '^chain_Run3Summer22[a-z|A-Z|0-9]*'
+    '(?!MiniAOD)_[a-z|A-Z|0-9]*'
+    '(?!MiniAOD)'
 )
 DESIRED_CHECK_CAMPAIGN = re.compile(just_root_section)
 
@@ -514,7 +515,7 @@ def summary_tickets(created_tickets: List[Dict]) -> int:
         int: Total number of events related to all created tickets.
     """
     logger.info('....................................')
-    logger.info('Final summary')
+    logger.info('Summary')
     logger.info('\n')
 
     total_events: int = 0
@@ -695,15 +696,16 @@ def inspect_chain_request_pattern(mcm_sdk: McM, tickets: List[str]) -> bool:
                     logger.error(
                         (
                             'Root request: %s \n'
-                            'Does not have any `chain_request` that complies with the pattern'
+                            'Does not have any `chain_request` that complies with `chain_campaign` the pattern. \n'
+                            'Ticket desired pattern: %s'
                         ),
-                        chain_req.get('prepid', '<ChainRequestNotAvailable>'),
                         ticket_root_req_prepid,
-                        member_of_campaign_check
+                        ticket_chain_match
                     )
                     all_complies = False
             else:
-                member_of_campaign_check = chain_requests_root_req[0].get('member_of_campaign', '')
+                only_chain_request: dict = chain_requests_root_req[0]
+                member_of_campaign_check = only_chain_request.get('member_of_campaign', '')
                 complies_pattern_regex = DESIRED_CHECK_CAMPAIGN.match(member_of_campaign_check)
                 complies_pattern_match: str = complies_pattern_regex[0] if complies_pattern_regex else '<NotFound>'
 
@@ -713,11 +715,13 @@ def inspect_chain_request_pattern(mcm_sdk: McM, tickets: List[str]) -> bool:
                             'Chain request: %s \n'
                             'Included in root request: %s \n'
                             'Analyzed chain campaign: %s \n'
-                            'Does not comply with the pattern'
+                            'Does not comply with the pattern \n'
+                            'Ticket desired pattern: %s'
                         ),
-                        chain_req.get('prepid', '<ChainRequestNotAvailable>'),
+                        only_chain_request.get('prepid', '<ChainRequestNotAvailable>'),
                         ticket_root_req_prepid,
-                        member_of_campaign_check
+                        member_of_campaign_check,
+                        ticket_chain_match
                     )
                     all_complies = False
 
@@ -841,13 +845,23 @@ if __name__ == '__main__':
             # at least one `chain_request` related to the new `chain_campaign`
             # linked to the new ticket.
             st_step5: datetime.datetime = datetime.datetime.now()
-            ticket_constructed_well: bool = inspect_chain_request_pattern(
+            tickets_constructed_well: bool = inspect_chain_request_pattern(
                 mcm_sdk=mcm,
                 tickets=created_ticket_prepids
             )
-            proceed_to_reserve = proceed_to_reserve and ticket_constructed_well
+            logger.info(
+                'Inspect ticket `chain_request` has finish successfully: %s',
+                tickets_constructed_well
+            )
+            proceed_to_reserve = proceed_to_reserve and tickets_constructed_well
             et_step5: datetime.datetime = datetime.datetime.now()
             elapsed_time(start_time=st_step5, end_time=et_step5, extra_msg='Step 5')
+
+            # Is okay to reserve?
+            logger.info(
+                'Checks required to reserve finished successfully: %s', 
+                proceed_to_reserve
+            )
 
             if proceed_to_reserve and RESERVE:
                 # Step 6: Reserve all the tickets and start the automatic submission
