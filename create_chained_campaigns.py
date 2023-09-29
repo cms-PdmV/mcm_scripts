@@ -42,6 +42,21 @@ valid_chain_campaigns: str = f'^chain_{valid_requests_campaigns}'
 ROOT_REQUEST_VALIDATOR = re.compile(valid_root_requests)
 CHAIN_CAMPAIGNS_VALIDATOR = re.compile(valid_chain_campaigns)
 
+# Checks for some constraints
+# Include some regex to check some constraints
+exact_miniaod_nanoaod_termination: str = (
+    '^chain_Run3Summer22[a-z|A-Z|0-9|_]*'
+    '_flowRun3Summer22(EE)?MiniAOD'
+    '_flowRun3Summer22(EE)?NanoAOD(v[0-9]{2})?$'
+)
+
+# Just the beginning
+just_root_section: str = (
+    '^chain_Run3Summer22([a-z|A-Z|0-9]*'
+    '(?!MiniAOD)[_]){1,2}'
+)
+DESIRED_CHECK_CAMPAIGN = re.compile(just_root_section)
+
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -58,6 +73,22 @@ def pretty(obj: Dict) -> str:
         width=50,
         compact=True
     )
+
+
+def elapsed_time(
+        start_time: datetime.datetime, 
+        end_time: datetime.datetime, 
+        extra_msg: str = ''
+    ):
+    """
+    Helper function just to print the elapsed time
+    """
+    if extra_msg:
+        logger.info('%s -> Elapsed time: %s', extra_msg, end_time - start_time)
+    else:
+        logger.info('Elapsed time: %s', end_time - start_time)
+    
+    logger.info('\n')
 
 
 def create_chained_campaign(
@@ -242,8 +273,8 @@ def create_mccm_tickets(
         create_tickets (bool): Create the tickets in McM
     
     Returns:
-        List[dict]: List of all MccM ticket to include in McM or the result of submitting
-            its creation to McM.
+        List[dict]: List of all MccM ticket to include in McM or the ticket data after
+            being created in to McM.
     """
 
     discard_chain_campaign_set: Set[str] = set(discard_chain_campaign)
@@ -381,63 +412,106 @@ def create_mccm_tickets(
             tickets.append(mccm_ticket)
 
     total_tickets: int = len(tickets)
-    submission_result: List[Dict] = []
-    new_ticket_prepids: List[str] = []
+    new_ticket_data: List[dict] = []
 
     if create_tickets:
         # Create the ticket
         for idx, ticket in enumerate(tickets):
             logger.debug(pretty(ticket))
             logger.info('%d of %d - Creating new ticket', idx, total_tickets)
+            start_time_ticket: datetime.datetime = datetime.datetime.now()
             res = mcm.put('mccms', ticket)
             ticket_prepid = res.get('prepid', None)
-            new_ticket_prepids.append(ticket_prepid)
             logger.info('Transaction result: %s', res)
-        
-        # Generate and reserve the chains
-        new_ticket_prepids = [tk_prepid for tk_prepid in new_ticket_prepids if tk_prepid]
-        created_total_tickets: int = len(new_ticket_prepids)
-        for idx, ticket_prepid in enumerate(new_ticket_prepids):
-            logger.info('%d of %d - Operating ticket: %s', idx, created_total_tickets, ticket_prepid)
-            start_time_ticket: datetime.datetime = datetime.datetime.now()
-            try:
-                # Reserve the ticket
-                logger.info('Reserving ticket ...')
-                _ = mcm._McM__get('restapi/mccms/generate/%s?reserve=true&skip_existing=true' % (ticket_prepid))
 
-                # Updating total events for the ticket
-                logger.info('Updating events ...')
-                _ = mcm._McM__get('restapi/mccms/update_total_events/%s' % (ticket_prepid))
-
-                # Retrieve ticket information
-                logger.info('Retriving ticket information ...')
-                ticket_info = mcm._McM__get('restapi/mccms/get/%s' % (ticket_prepid))
-                logger.debug(pretty(ticket_info))
-                submission_result.append(ticket_info)
-            except HTTPError as http_error:
-                logger.error(
-                    'Server error processing the current ticket - Index: %s',
-                    idx
-                )
-                logger.error(http_error, exc_info=True)
+            # Updating total events for the ticket
+            if not ticket_prepid:
+                logger.error('There was an error trying to create this ticket, its information was: ')
+                logger.error(pretty(ticket))
+                continue
                 
-            finally:
-                end_time_ticket: datetime.datetime = datetime.datetime.now()
-                logger.info(
-                    'Elapsed time for processing the ticket: %s',
-                    end_time_ticket - start_time_ticket
-                )
-                time.sleep(2) # Avoid killing McM application
+            logger.info('Updating events ...')
+            _ = mcm._McM__get('restapi/mccms/update_total_events/%s' % (ticket_prepid))
 
-    return submission_result if create_tickets else tickets
+            # Retrieve ticket data
+            logger.info('Retriving ticket information ...')
+            ticket_info = mcm._McM__get('restapi/mccms/get/%s' % (ticket_prepid))
+            new_ticket_data.append(ticket_info)
+            
+            end_time_ticket: datetime.datetime = datetime.datetime.now()
+            elapsed_time(start_time=start_time_ticket, end_time=end_time_ticket)
+        
+    return new_ticket_data if create_tickets else tickets
 
 
-def print_summary(created_tickets: List[Dict]):
+def reserve_tickets(mcm_sdk: McM, tickets_prepid: List[str]) -> List[Dict]:
     """
-    Print a little summary related to the ticket creation.
+    Reserve the desired tickets to generate the chains and start
+    the automatic submission to computing.
+
+    Args:
+        mcm_sdk (McM): McM SDK to perform API operations
+        tickets_prepid (List[str]): List of ticket prepid's to reserve the
+            desired tickets.
+
+    Returns:
+        List[dict]: Data for all the tickets that were operated.
+    """
+    # Make sure the list is clean and there are only strings
+    tickets_prepid = [tk for tk in tickets_prepid if tk and isinstance(tk, str)]
+    total_tickets: int = len(tickets_prepid)
+    submission_result: List[Dict] = []
+
+    
+    for idx, ticket_prepid in enumerate(tickets_prepid):
+        logger.info('%d of %d - Operating ticket: %s', idx, total_tickets, ticket_prepid)
+        start_time_ticket: datetime.datetime = datetime.datetime.now()
+        try:
+            # Reserve the ticket
+            logger.info('Reserving ticket ...')
+            _ = mcm_sdk._McM__get('restapi/mccms/generate/%s?reserve=true&skip_existing=true' % (ticket_prepid))
+
+            # Updating total events for the ticket
+            logger.info('Updating events ...')
+            _ = mcm_sdk._McM__get('restapi/mccms/update_total_events/%s' % (ticket_prepid))
+
+            # Retrieve ticket information
+            logger.info('Retriving ticket information ...')
+            ticket_info = mcm_sdk._McM__get('restapi/mccms/get/%s' % (ticket_prepid))
+            logger.debug(pretty(ticket_info))
+            submission_result.append(ticket_info)
+        except HTTPError as http_error:
+            logger.error(
+                'Server error processing the current ticket - Index: %s',
+                idx
+            )
+            logger.error(http_error, exc_info=True)
+                
+        finally:
+            end_time_ticket: datetime.datetime = datetime.datetime.now()
+            elapsed_time(
+                start_time=start_time_ticket, 
+                end_time=end_time_ticket,
+                extra_msg='Ticket processing time'
+            )
+            time.sleep(2) # Avoid killing McM application
+
+    return submission_result
+
+
+def summary_tickets(created_tickets: List[Dict]) -> int:
+    """
+    Create a little summary related to the ticket creation.
     Display the number of total events linked to a ticket, its
     generated_chains and the total number of events related to
-    this whole process
+    this whole process.
+
+    Args:
+        created_tickets (List[dict]): Ticket's data for all created
+            tickets.
+
+    Returns:
+        int: Total number of events related to all created tickets.
     """
     logger.info('....................................')
     logger.info('Final summary')
@@ -471,6 +545,183 @@ def print_summary(created_tickets: List[Dict]):
         f'{total_events:,}',
         f'{total_events:E}',
     )
+    return total_events
+
+
+def inspect_ticket(mcm_sdk: McM, tickets: List[str]) -> int:
+    """
+    For the new created tickets, inspect their `root_requests`
+    and display its total number of events. Then, compute the total
+    number of events for the ticket based on its root requests and finally
+    sum up all the events for all the tickets.
+
+    Args:
+        mcm_sdk (McM): McM SDK to perform queries
+        tickets (List[str]): List of ticket prepids to inspect.
+
+    Returns:
+        int: Total number of events for all the tickets
+            desired to be inspected.
+    """
+    total_events_inspection: int = 0
+    total_tickets: int = len(tickets)
+    for idx, ticket_prepid in enumerate(tickets):
+        total_events_from_root_req: int = 0 
+        logger.info('\n %s of %s -> Checking ticket: %s \n', idx, total_tickets, ticket_prepid)
+        ticket = mcm_sdk._McM__get('restapi/mccms/get/%s' % (ticket_prepid))
+        
+        if not ticket:
+            logger.warning('Could not retrieve data for ticket: %s', ticket_prepid)
+            continue
+        
+        ticket_root_reqs: List[str] = ticket.get('results', {}).get('requests', [])
+        if not ticket_root_reqs:
+            logger.warning('Ticket %s does not have root requests attached', ticket_prepid)
+            continue
+
+        total_root_requests: int = len(ticket_root_reqs)
+        for idx, ticket_root_req_prepid in enumerate(ticket_root_reqs):
+            root_req: dict = mcm_sdk._McM__get('restapi/requests/get/%s' % (ticket_root_req_prepid))
+            if not root_req:
+                logger.warning('Could not retrieve info for root request: %s', ticket_root_req_prepid)
+                continue
+            
+            root_req_events: int = root_req.get('results', {}).get('total_events', 0)
+            logger.debug('%s of %s -> Root request: %s - Events: %s', idx, total_root_requests, ticket_root_req_prepid, root_req_events)
+            total_events_from_root_req += root_req_events
+        
+        logger.info('Total events for ticket inspected: %s - Events: %s', ticket_prepid, total_events_from_root_req)
+        total_events_inspection += total_events_from_root_req
+    
+    logger.info(
+        '\n Total number of events for all the inspection: %s - Scientific notation: %s \n',
+        f'{total_events_inspection:,}',
+        f'{total_events_inspection:E}',
+    )
+    return total_events_inspection
+
+
+def inspect_chain_request_pattern(mcm_sdk: McM, tickets: List[str]) -> bool:
+    """
+    Scan all the root requests per ticket. For each root request,
+    scan the `chain_requests` that contain this request and verify that
+    the `chain_campaign` linked to this chain_requests is related with the
+    desired campaign.
+
+    Args:
+        mcm_sdk (McM): McM SDK to perform queries
+        tickets (List[str]): List of ticket prepids to inspect.
+
+    Returns:
+        bool: True if all root_requests comply with the desired pattern 
+            False, otherwise.
+    """
+    all_complies: bool = True
+    total_tickets: int = len(tickets)
+    for idx, ticket_prepid in enumerate(tickets):
+        logger.info('\n %s of %s -> Checking ticket: %s \n', idx, total_tickets, ticket_prepid)
+        ticket = mcm_sdk._McM__get('restapi/mccms/get/%s' % (ticket_prepid))
+
+        if not ticket:
+            logger.error('Could not retrieve data for ticket: %s', ticket_prepid)
+            all_complies = False
+            break
+        ticket = ticket.get('results', {})
+
+        # Our created tickets just have one chain
+        ticket_chain: str = ticket.get('chains', [])
+        if not len(ticket_chain) == 1:
+            logger.error('Ticket: %s should have only one chain_campaign', )
+            all_complies = False
+            break
+        ticket_chain = ticket_chain[0]
+        ticket_chain_regex = DESIRED_CHECK_CAMPAIGN.match(ticket_chain)
+        ticket_chain_match: str = ticket_chain_regex[0] if ticket_chain_regex else ''
+        if not ticket_chain_match:
+            logger.critical(
+                'Ticket: %s - Chain campaign: <%s> does not match the desired pattern', 
+                ticket_prepid,
+                ticket_chain_match
+            )
+            all_complies = False
+            break
+
+        # Inspect root requests
+        ticket_root_reqs: List[str] = ticket.get('requests', [])
+        if not ticket_root_reqs:
+            logger.error('Ticket %s does not have root requests attached', ticket_prepid)
+            all_complies = False
+            break
+
+        total_root_requests: int = len(ticket_root_reqs)
+        for idx, ticket_root_req_prepid in enumerate(ticket_root_reqs):
+            logger.debug('%s of %s -> Root request: %s', idx, total_root_requests, ticket_root_req_prepid)
+            root_req: dict = mcm_sdk._McM__get('restapi/requests/get/%s' % (ticket_root_req_prepid))
+            if not root_req:
+                logger.error('Could not retrieve info for root request: %s', ticket_root_req_prepid)
+                all_complies = False
+                continue
+            root_req = root_req.get('results', {})
+            
+            # member_of_campaign
+            chain_requests_root_req: dict = mcm.get('chained_requests', query=f'contains={ticket_root_req_prepid}')
+            if not len(chain_requests_root_req) == 1:
+                logger.warning(
+                    '[BEWARE] Root request: %s has more than one chain_request to check',
+                    ticket_root_req_prepid
+                )
+                at_least_one_complies: bool = False
+                for chain_req in chain_requests_root_req:
+                    member_of_campaign: str = chain_req.get('member_of_campaign', '')
+                    complies_pattern_regex = DESIRED_CHECK_CAMPAIGN.match(member_of_campaign)
+                    complies_pattern_match: str = complies_pattern_regex[0] if complies_pattern_regex else '<NotFound>'
+
+                    if complies_pattern_match == ticket_chain_match:
+                        at_least_one_complies = True
+                        logger.debug(
+                            (
+                                'Chain request: %s \n'
+                                'Included in root request: %s \n'
+                                'Analyzed chain campaign: %s \n'
+                                'Complies with the pattern'
+                            ),
+                            chain_req.get('prepid', '<ChainRequestNotAvailable>'),
+                            ticket_root_req_prepid,
+                            member_of_campaign_check
+                        )
+                        break
+
+                if not at_least_one_complies:
+                    logger.error(
+                        (
+                            'Root request: %s \n'
+                            'Does not have any `chain_request` that complies with the pattern'
+                        ),
+                        chain_req.get('prepid', '<ChainRequestNotAvailable>'),
+                        ticket_root_req_prepid,
+                        member_of_campaign_check
+                    )
+                    all_complies = False
+            else:
+                member_of_campaign_check = chain_requests_root_req[0].get('member_of_campaign', '')
+                complies_pattern_regex = DESIRED_CHECK_CAMPAIGN.match(member_of_campaign_check)
+                complies_pattern_match: str = complies_pattern_regex[0] if complies_pattern_regex else '<NotFound>'
+
+                if not complies_pattern_match == ticket_chain_match:
+                    logger.error(
+                        (
+                            'Chain request: %s \n'
+                            'Included in root request: %s \n'
+                            'Analyzed chain campaign: %s \n'
+                            'Does not comply with the pattern'
+                        ),
+                        chain_req.get('prepid', '<ChainRequestNotAvailable>'),
+                        ticket_root_req_prepid,
+                        member_of_campaign_check
+                    )
+                    all_complies = False
+
+    return all_complies
 
 
 if __name__ == '__main__':
@@ -478,7 +729,10 @@ if __name__ == '__main__':
     mcm: McM = McM(dev=True)
     
     # Create all the elements
-    CREATE = True
+    CREATE: bool = True
+
+    # Reserve the tickets
+    RESERVE: bool = False
 
     # Skip this chained champaigns for creating a ticket
     skip_ch_campaigns_ticket: List[str] = []
@@ -486,6 +740,7 @@ if __name__ == '__main__':
     # Step 1: Create new `chain_campaigns` based on some that already
     # exists, changing the last campaigns and flow related to the data tiers
     # MiniAOD and NanoAOD
+    st_step1: datetime.datetime = datetime.datetime.now()
 
     # Clean up to MiniAOD
     clean_chain_up_to: str = REMOVAL_ORDER[1]
@@ -511,26 +766,105 @@ if __name__ == '__main__':
     )
     created_ch_campaigns = list(set(created_ch_campaigns))
     logger.info('New chained campaigns to use: %d', len(created_ch_campaigns))
+    et_step1: datetime.datetime = datetime.datetime.now()
+    elapsed_time(start_time=st_step1, end_time=et_step1, extra_msg='Step 1')
+
 
     # Step 2: Retrieve the list of all root requests to link with the new chain_campaign
+    st_step2: datetime.datetime = datetime.datetime.now()
     root_requests_query: str = 'prepid=*Run3Summer22*GS*'
     root_requests: List[Dict] = mcm.get('requests', query=root_requests_query)
     # Filter the root requests
     root_requests = [root_req for root_req in root_requests if ROOT_REQUEST_VALIDATOR.match(root_req.get('prepid', ''))]
     logger.info('Matching new chain_campaigns for %d root requests', len(root_requests))
+    et_step2: datetime.datetime = datetime.datetime.now()
+    elapsed_time(start_time=st_step2, end_time=et_step2, extra_msg='Step 2')
 
-    # Step 3: Create a McM tickets 
-    ticket_result = create_mccm_tickets(
+
+    # Step 3: Create a MccM tickets without reserve them
+    st_step3: datetime.datetime = datetime.datetime.now()
+    ticket_result: List[Dict] = create_mccm_tickets(
         mcm=mcm,
         root_requests=root_requests,
         chain_campaigns=created_ch_campaigns,
         discard_chain_campaign=skip_ch_campaigns_ticket,
         create_tickets=CREATE
     )
+    et_step3: datetime.datetime = datetime.datetime.now()
+    elapsed_time(start_time=st_step3, end_time=et_step3, extra_msg='Step 3')
 
-    # Step 4: Print a summary if required
+
     if CREATE:
-        print_summary(created_tickets=ticket_result)
+        creation_successful: bool = True
+        created_ticket_prepids: List[str] = [
+            ticket.get('results', {}).get('prepid', '')
+            for ticket in ticket_result
+            if ticket
+        ]
+        created_ticket_prepids = [tk for tk in created_ticket_prepids if tk]
+        if not len(created_ticket_prepids) == len(ticket_result):
+            logger.warning(
+                (
+                    'There is a mismatch between ticket prepids and created tickets. '
+                    'Check that `create_mccm_tickets(...)` does not include `None` values'
+                )
+            )
+            creation_successful = False
+
+        if creation_successful:
+            proceed_to_reserve: bool = True
+
+            # Step 4: Retrieve the total number of events
+            # related to the tickets and make sure it is the same as
+            # the sum of total number of events.
+            st_step4: datetime.datetime = datetime.datetime.now()
+            total_events_from_tickets: int = summary_tickets(created_tickets=ticket_result)
+            total_events_from_root_req: int = inspect_ticket(mcm_sdk=mcm, tickets=created_ticket_prepids)
+
+            if not total_events_from_tickets == total_events_from_root_req:
+                logger.warning(
+                    (
+                        'There is a mismatch between the total events taken '
+                        'from the `ticket` and the sum from `root_requests`. \n'
+                        'Total events from all tickets: %s \n'
+                        'Total events from the sum of all root requests: %s \n'
+                    ),
+                    f'{total_events_from_tickets:,}',
+                    f'{total_events_from_root_req:,}',
+                )
+                proceed_to_reserve = False
+            et_step4: datetime.datetime = datetime.datetime.now()
+            elapsed_time(start_time=st_step4, end_time=et_step4, extra_msg='Step 4')
+
+
+            # Step 5: Check that all root request and its `chain_request` have
+            # at least one `chain_request` related to the new `chain_campaign`
+            # linked to the new ticket.
+            st_step5: datetime.datetime = datetime.datetime.now()
+            ticket_constructed_well: bool = inspect_chain_request_pattern(
+                mcm_sdk=mcm,
+                tickets=created_ticket_prepids
+            )
+            proceed_to_reserve = proceed_to_reserve and ticket_constructed_well
+            et_step5: datetime.datetime = datetime.datetime.now()
+            elapsed_time(start_time=st_step5, end_time=et_step5, extra_msg='Step 5')
+
+            if proceed_to_reserve and RESERVE:
+                # Step 6: Reserve all the tickets and start the automatic submission
+                st_step6: datetime.datetime = datetime.datetime.now()
+                ticket_data_after_reserve = reserve_tickets(
+                    mcm_sdk=mcm, 
+                    tickets_prepid=created_ticket_prepids
+                )
+                et_step6: datetime.datetime = datetime.datetime.now()
+                elapsed_time(start_time=st_step6, end_time=et_step6, extra_msg='Step 6')
+
+                # Step 7: Print a final summary
+                _ = summary_tickets(created_tickets=ticket_data_after_reserve)
 
     end_time: datetime.datetime = datetime.datetime.now()
-    logger.info('Elapsed time: %s', end_time - start_time)
+    elapsed_time(
+        start_time=start_time, 
+        end_time=end_time, 
+        extra_msg='Total required time to process this script'
+    )
