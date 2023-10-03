@@ -65,9 +65,15 @@ class BaseTest(unittest.TestCase):
         home = os.getenv("HOME")
         dev_cookie_path = "%s/private/mcm-dev-cookie.txt" % (home)
         prod_cookie_path = "%s/private/mcm-prod-cookie.txt" % (home)
+
+        try:
+            os.remove(prod_cookie_path)
+        except OSError:
+            # Supress the error if some file doesn't exist
+            pass
+
         try:
             os.remove(dev_cookie_path)
-            os.remove(prod_cookie_path)
         except OSError:
             # Supress the error if some file doesn't exist
             pass
@@ -91,6 +97,25 @@ class BaseTest(unittest.TestCase):
         test_prepid = "TOP-Summer12-00368"
         single_request = self.mcm.get("requests", test_prepid, method="get")
         self.assertIsNotNone(single_request, "The request exists in McM and its information should be available")
+        self.assertIsInstance(single_request, dict, "This should have the request information as a dictionary")
+        self.assertEqual(test_prepid, single_request["prepid"], "The retrieved request is not the desired one")
+
+    def test_public_api(self):
+        """
+        Check that McM module is able to execute requests
+        to the public API independently if authentication
+        is provided or not.
+        """
+        if isinstance(self, BaseTest) and type(self) == BaseTest:
+            raise unittest.SkipTest("This execution is related to the BaseTest, skip it")
+
+        request_public_endpoint = "public/restapi/requests/get"
+        test_prepid = "TOP-Summer12-00368"
+        request_from_public = "%s/%s" % (request_public_endpoint, test_prepid)
+
+        raw_result = self.mcm._McM__get(request_from_public)
+        single_request = raw_result.get('results', {})
+        self.assertTrue(single_request, "The request exists in McM and its information should be available")
         self.assertIsInstance(single_request, dict, "This should have the request information as a dictionary")
         self.assertEqual(test_prepid, single_request["prepid"], "The retrieved request is not the desired one")
 
@@ -129,7 +154,7 @@ class SSOTestProduction(BaseTest):
         return super(SSOTestProduction, self).test_module()
     
 
-class IDToken(BaseTest):
+class TestIDToken(BaseTest):
     """
     This test checks that McM REST module works properly
     by requesting an ID token for authenticating user actions.
@@ -137,11 +162,11 @@ class IDToken(BaseTest):
     it is required human intervention.
     """
     def setUp(self):
-        super(IDToken, self).setUp()
+        super(TestIDToken, self).setUp()
         self.mcm = McM(McM.OIDC, dev=True)
 
 
-class IDTokenExpiredDevelopment(BaseTest):
+class TestIDTokenExpiredDevelopment(BaseTest):
     """
     This test checks that McM REST module is able to
     refresh ID tokens properly if they have already expired.
@@ -149,7 +174,7 @@ class IDTokenExpiredDevelopment(BaseTest):
     it is required human intervention.
     """
     def setUp(self):
-        super(IDTokenExpiredDevelopment, self).setUp()
+        super(TestIDTokenExpiredDevelopment, self).setUp()
         self.mcm = McM(McM.OIDC, dev=True)
         # Set an invalid JWT token before doing the request.
         # Token retrieved from: https://jwt.io/
@@ -162,6 +187,29 @@ class IDTokenExpiredDevelopment(BaseTest):
         )
         self.mcm.token = invalid_token
     
+
+class NoAuthProvided(BaseTest):
+    """
+    This test checks that McM REST module is able to
+    execute HTTP requests even if no authentication is
+    provided.
+    """
+    def setUp(self):
+        super(NoAuthProvided, self).setUp()
+        self.mcm = McM(id=None, dev=True)
+        self.mcm.max_retries = 1
+    
+    def test_module(self):
+        """
+        Check that an error is raised if a protected resource
+        is consumed without providing authentication credentials.
+        """
+        # Because no credential is provided, McM client must not be able
+        # to consume a protected resource. The client should return a
+        # `None` value as response and when it is consumed by the test,
+        # it must fail
+        self.assertRaises(AttributeError, super(NoAuthProvided, self).test_module)
+
 
 if __name__ == "__main__":
     unittest.main()

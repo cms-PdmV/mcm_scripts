@@ -258,13 +258,15 @@ class McM:
             self.token = self.__request_token()
             self.opener = urllib.build_opener()
         else:
+            self.logger.warning('Using McM client without providing authentication')
             self.opener = urllib.build_opener()
 
         # Verify the credential before allow the user to perform further requests
-        valid_credential = self.__verify_credential()
-        if not valid_credential:
-            self.logger.error('Available credential is not valid, closing client')
-            sys.exit(1)
+        if self.id in (McM.SSO, McM.OIDC):
+            valid_credential = self.__verify_credential()
+            if not valid_credential:
+                self.logger.error('Available credential is not valid, closing client')
+                sys.exit(1)
 
 
     def __generate_cookie(self):
