@@ -56,6 +56,8 @@ class McM:
     CERN_OIDC_API = 'https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/'
     OIDC_DEVICE_ENDPOINT = 'auth/device'
     OIDC_TOKEN_ENDPOINT = 'token'
+    COOKIE_ENV_VAR = 'MCM_COOKIE_PATH'
+
 
     def __init__(self, id=SSO, debug=False, cookie=None, dev=True):
         if dev:
@@ -72,19 +74,26 @@ class McM:
             logging_level = logging.DEBUG
         else:
             logging_level = logging.INFO
+        
+        # Set up logging
+        logging.basicConfig(format='[%(asctime)s][%(levelname)s] %(message)s', level=logging_level)
+        self.logger = logging.getLogger()
 
+        cookie_from_env = os.getenv(McM.COOKIE_ENV_VAR)
         if cookie:
             self.cookie = cookie
+        elif cookie_from_env:
+            self.logger.info(
+                "Setting cookie via '%s' environment variable", 
+                McM.COOKIE_ENV_VAR
+            )
+            self.cookie = cookie_from_env
         else:
             home = os.getenv('HOME')
             if dev:
                 self.cookie = '%s/private/mcm-dev-cookie.txt' % (home)
             else:
                 self.cookie = '%s/private/mcm-prod-cookie.txt' % (home)
-
-        # Set up logging
-        logging.basicConfig(format='[%(asctime)s][%(levelname)s] %(message)s', level=logging_level)
-        self.logger = logging.getLogger()
 
         # Request retries
         self.max_retries = 3
@@ -126,10 +135,14 @@ class McM:
                 )
             )
 
-    def __verify_credential(self):
+    def __verify_credential(self, display_help=True):
         """
         Send a HTTP request to a protected endpoint in McM to check
         if the provided credential is valid.
+
+        Args:
+            display_help (bool): If True, display some help messages
+                about the situation.
 
         Returns:
             bool: True if the credential is valid, False otherwise.
@@ -137,7 +150,7 @@ class McM:
         Raises:
             HTTPError: If the HTTP response has a status code different that 200 or 3XX
         """
-        def __help_message__():
+        def __help_message__(help):
             """
             Logs some messages to give advice to the user if the authentication
             process failed.
@@ -145,7 +158,7 @@ class McM:
             self.logger.error('Verifying credential: HTTP response has a 3XX status code')
             self.logger.error('The provided credential is not valid')
             self.logger.info('Authentication mechanism: %s' % self.id)
-            if self.id == McM.SSO:
+            if self.id == McM.SSO and help:
                 self.logger.info('Please remember that, if you have enabled 2FA, it is not possible to request')
                 self.logger.info('session cookies. Please use the authentication mechanism "oidc" for using this client')
 
@@ -156,12 +169,12 @@ class McM:
             self.logger.debug('Verifying credential by consuming a resource in McM')
             response = self.__http_request(protected_resource, 'GET', parse_json=False, raise_on_redirection=True, raw_response=True)
             if response.url.startswith(authentication_required):
-                __help_message__()
+                __help_message__(display_help)
                 return False
             return True
         except HTTPError as some_error:
             if (300 <= some_error.code <= 399):
-                __help_message__()
+                __help_message__(display_help)
                 return False
             raise some_error
 
@@ -243,11 +256,15 @@ class McM:
             if not os.path.isfile(self.cookie):
                 self.logger.info('SSO cookie file is absent. Will try to make one for you...')
                 self.__generate_cookie()
-                if not os.path.isfile(self.cookie):
-                    self.logger.error('Missing cookie file %s, quitting', self.cookie)
-                    sys.exit(1)
             else:
                 self.logger.info('Using SSO cookie file %s' % (self.cookie))
+                display_help = False
+                if not self.__verify_credential(display_help):
+                    self.__generate_cookie()
+
+            if not os.path.isfile(self.cookie):
+                self.logger.error('Missing cookie file %s, quitting', self.cookie)
+                sys.exit(1)
 
             cookie_jar = cookielib.MozillaCookieJar(self.cookie)
             cookie_jar.load()
@@ -263,8 +280,7 @@ class McM:
 
         # Verify the credential before allow the user to perform further requests
         if self.id in (McM.SSO, McM.OIDC):
-            valid_credential = self.__verify_credential()
-            if not valid_credential:
+            if not self.__verify_credential():
                 self.logger.error('Available credential is not valid, closing client')
                 sys.exit(1)
 
@@ -371,7 +387,6 @@ class McM:
                         wait_time
                     )
                     time.sleep(wait_time)
-                    self.__generate_cookie()
                     self.__connect()
                 elif self.id == McM.OIDC:
                     self.logger.warning('Your ID token seems to be expired, the interactive flow will start again')
