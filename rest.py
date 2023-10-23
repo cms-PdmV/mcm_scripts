@@ -252,11 +252,23 @@ class McM:
         Verifies, retrieves or requests a valid credential to authenticate the user actions in
         McM. This handles the request for session cookies or ID tokens for sending them to the server.
         """
+        def __load_cookie():
+            """
+            Loads a given cookie.
+            """
+            cookie_jar = cookielib.MozillaCookieJar(self.cookie)
+            cookie_jar.load()
+            for cookie in cookie_jar:
+                self.logger.debug('Cookie %s', cookie)
+            self.opener = urllib.build_opener(urllib.HTTPCookieProcessor(cookie_jar))
+
         if self.id == McM.SSO:
             if not os.path.isfile(self.cookie):
                 self.logger.info('SSO cookie file is absent. Will try to make one for you...')
                 self.__generate_cookie()
             else:
+                # Load the provided cookie for checking it.
+                __load_cookie()
                 self.logger.info('Using SSO cookie file %s' % (self.cookie))
                 display_help = False
                 if not self.__verify_credential(display_help):
@@ -266,11 +278,9 @@ class McM:
                 self.logger.error('Missing cookie file %s, quitting', self.cookie)
                 sys.exit(1)
 
-            cookie_jar = cookielib.MozillaCookieJar(self.cookie)
-            cookie_jar.load()
-            for cookie in cookie_jar:
-                self.logger.debug('Cookie %s', cookie)
-            self.opener = urllib.build_opener(urllib.HTTPCookieProcessor(cookie_jar))
+            # Load the created or renewed it cookie.
+            __load_cookie()
+
         elif self.id == McM.OIDC:
             self.token = self.__request_token()
             self.opener = urllib.build_opener()
