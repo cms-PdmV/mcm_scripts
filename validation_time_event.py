@@ -10,11 +10,8 @@ sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 import logging
 import pprint
 import datetime
-import time
-import re
-import json
 from urllib.error import HTTPError
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional
 from copy import deepcopy
 from rest import McM
 
@@ -350,6 +347,3 @@ if __name__ == '__main__':
     logger.info('Elapsed time: %s', end_time - start_time)
     logger.info('%s request have been processed', len(updated_req))
     logger.info('%s', pretty(updated_req))
-
-
-pass
