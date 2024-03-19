@@ -256,61 +256,6 @@ def campaigns_to_check(
     return result
 
 
-def patch_campaign_condition(
-    mcm: McM, campaigns_prepid: list[str], condition_gt: str
-) -> list[str]:
-    """
-    Patches the conditions for the given campaigns with
-    the given condition global tag.
-
-    Args:
-        mcm (McM): McM client instance
-        campaigns_prepid (list[str]): Campaigns to check and update
-        condition_gt (str): New GlobalTag to set in the campaigns
-
-    Returns:
-        list[str]: Campaign's prepid updated.
-    """
-    result: list[str] = []
-    for prepid in campaigns_prepid:
-        condition_updated = False
-        campaign_data = mcm.get(object_type="campaigns", object_id=prepid)
-        sequences_bundle = campaign_data.get("sequences", [])
-        for idx, bundle in enumerate(sequences_bundle):
-            for seq_type, value in bundle.items():
-                condition = value.get("conditions")
-                if condition != condition_gt:
-                    condition_updated = True
-                    logger.info(
-                        (
-                            "Changing condition for campaign (%s) sequence (%s) "
-                            "type (%s). Current value: %s. New Value: %s"
-                        ),
-                        prepid,
-                        idx,
-                        seq_type,
-                        condition,
-                        condition_gt,
-                    )
-                    campaign_data["sequences"][idx][seq_type][
-                        "conditions"
-                    ] = condition_gt
-
-        # Update if required
-        if condition_updated:
-            campaign_update_result = mcm.update(
-                object_type="campaigns", object_data=campaign_data
-            )
-            if not campaign_update_result or not campaign_update_result.get("results"):
-                msg = f"Unable to update the sequences for campaign {prepid}"
-                logger.error(msg)
-                raise RuntimeError(msg)
-
-            result.append(prepid)
-
-    return result
-
-
 def get_campaign_condition(
     mcm: McM, campaign_prepid: str, condition_gt: str, includes: bool
 ) -> list[str]:
