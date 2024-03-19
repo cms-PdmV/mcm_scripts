@@ -477,7 +477,6 @@ if __name__ == "__main__":
     logger.info("Campaigns retrieved: %s", pretty(campaigns))
 
     # 2. Scan all the root requests linked.
-    total_idx = 1
     for c_idx, campaign_prepid in enumerate(campaigns):
         logger.info(
             "Scanning requests for campaign (%s), GlobalTag filter on conditions (%s), include if match (%s)",
