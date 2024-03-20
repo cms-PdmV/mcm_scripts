@@ -497,15 +497,25 @@ if __name__ == "__main__":
         # 3. Apply the patch.
         for r_idx, request_prepid in enumerate(linked_requests):
             logger.info("Patching request (%s)", request_prepid)
-            patch_chain_request(
-                mcm=mcm,
-                request_prepid=request_prepid,
-                tracking_tag=tracking_tag,
-                operate=apply_patch,
-            )
+            try:
+                patch_chain_request(
+                    mcm=mcm,
+                    request_prepid=request_prepid,
+                    tracking_tag=tracking_tag,
+                    operate=apply_patch,
+                )
 
-            if r_idx >= process_ch_req_idx:
-                break
+            except Exception as e:
+                logger.critical(
+                    "Unable to patch the following request: %s - Details: %s",
+                    request_prepid,
+                    e,
+                    stack_info=True,
+                )
+
+            finally:
+                if r_idx >= process_ch_req_idx:
+                    break
 
     end_time: datetime.datetime = datetime.datetime.now()
     logger.info("Total elapsed time: %s", end_time - start_time)
