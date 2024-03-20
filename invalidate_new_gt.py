@@ -12,9 +12,6 @@ import logging
 import pprint
 import re
 import sys
-import time
-from typing import Dict, List, Optional, Set
-from urllib.error import HTTPError
 from copy import deepcopy
 
 from rest import McM
@@ -47,7 +44,7 @@ def chunks(l, n):
         yield l[i : i + n]
 
 
-def pretty(obj: Dict) -> str:
+def pretty(obj: dict) -> str:
     """
     Pretty print an object in console
     """
@@ -195,18 +192,74 @@ def approve_until(
     raise RuntimeError("Unable to get the desired approval status")
 
 
-def elapsed_time(
-    start_time: datetime.datetime, end_time: datetime.datetime, extra_msg: str = ""
-):
+def process_soft_reset_root(mcm: McM, ch_rr_prepid: str) -> None:
     """
-    Helper function just to print the elapsed time
-    """
-    if extra_msg:
-        logger.info("%s -> Elapsed time: %s", extra_msg, end_time - start_time)
-    else:
-        logger.info("Elapsed time: %s", end_time - start_time)
+    This performs a customization for `soft reset` the root request.
+    It operates the root request so that its status is `approve/approved`
+    for the next steps in the sequence.
 
-    logger.info("\n")
+    Args:
+        mcm (McM): McM instance.
+        ch_rr_prepid (str): Chain request's `root` request prepid to operate.
+    """
+    req_data = mcm.get(object_type="requests", object_id=ch_rr_prepid)
+    req_approval = req_data.get("approval")
+    req_status = req_data.get("status")
+
+    if req_approval == "submit" and req_status == "done":
+        logger.warning(
+            (
+                "Root request (%s) is already done, reset it, "
+                "announce the invalidation and set it to approve/approved"
+            ),
+            ch_rr_prepid,
+        )
+
+        req_validation: dict | None = req_data.get("validation")
+        logger.info("Root request validation: %s", req_validation)
+        if not req_validation:
+            raise ValueError("Request's validation is not valid: %s", req_validation)
+
+        # 1. Reset it.
+        reset_result = mcm.reset(prepid=ch_rr_prepid)
+        if not reset_result:
+            msg = f"Unable to reset the root request: {ch_rr_prepid}"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        # 2. Announce the invalidation.
+        invs = get_invalidations(mcm=mcm, requests=[ch_rr_prepid])
+        if invs:
+            announce_result = announce_invalidations(mcm=mcm, invalidations=invs)
+            logger.info("Invalidation result: %s", announce_result)
+            if not announce_result.get("results"):
+                msg = f"Unable to invalidate records for root request: {ch_rr_prepid}"
+                logger.error(msg)
+                logger.error("Invalidation records: %s", invs)
+                raise RuntimeError(msg)
+
+        # 3. Force its status to approve/approved, reincluding the validation.
+        req_data = mcm.get(object_type="requests", object_id=ch_rr_prepid)
+        req_data["validation"] = req_validation
+        req_data["approval"] = "approve"
+        req_data["status"] = "approved"
+
+        updated_result = mcm.update(object_type="requests", object_data=req_data)
+        if not updated_result or not updated_result.get("results"):
+            msg = f"Error forcing the root request status: {ch_rr_prepid}"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+    else:
+        soft_reset_result = mcm.soft_reset(prepid=ch_rr_prepid)
+        logger.info("Soft reset result: %s", soft_reset_result)
+        if not soft_reset_result:
+            msg = (
+                f"Unable to soft reset the request ({ch_rr_prepid}) "
+                "and set its status to approve/approved"
+            )
+            logger.error(msg)
+            raise RuntimeError(msg)
 
 
 def campaigns_to_check(
@@ -388,15 +441,7 @@ def patch_chain_request(
 
             # 6. Pick the `root` request and set its status to `approve/approved`.
             ch_rr_prepid: str = ch_req_requests[0]
-            soft_reset_result = mcm.soft_reset(prepid=ch_rr_prepid)
-            logger.info("Soft reset result: %s", soft_reset_result)
-            if not soft_reset_result:
-                msg = (
-                    f"Unable to soft reset the request ({ch_rr_prepid}) "
-                    "and set its status to approve/approved"
-                )
-                logger.error(msg)
-                raise RuntimeError(msg)
+            process_soft_reset_root(mcm=mcm, ch_rr_prepid=ch_rr_prepid)
 
             # 7. Pick the `root` request and include a tag for tracking and save it.
             ch_rr_data: dict = mcm.get("requests", object_id=ch_rr_prepid)
@@ -458,8 +503,8 @@ if __name__ == "__main__":
     include: bool = True
     apply_patch: bool = True
     tracking_tag: str = "PPD_OPS_GT"
-    process_campaigns_idx = 1
-    process_ch_req_idx = 1
+    process_campaigns_idx = 0
+    process_ch_req_idx = 0
 
     # 1. Retrieve the campaigns based on the GlobalTag
     logger.info(
@@ -491,9 +536,6 @@ if __name__ == "__main__":
             includes=include,
         )
 
-        if c_idx >= process_campaigns_idx:
-            break
-
         # 3. Apply the patch.
         for r_idx, request_prepid in enumerate(linked_requests):
             logger.info("Patching request (%s)", request_prepid)
@@ -510,12 +552,15 @@ if __name__ == "__main__":
                     "Unable to patch the following request: %s - Details: %s",
                     request_prepid,
                     e,
-                    stack_info=True,
+                    exc_info=True,
                 )
 
             finally:
                 if r_idx >= process_ch_req_idx:
                     break
+
+        if c_idx >= process_campaigns_idx:
+            break
 
     end_time: datetime.datetime = datetime.datetime.now()
     logger.info("Total elapsed time: %s", end_time - start_time)
