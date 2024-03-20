@@ -13,7 +13,7 @@ import pprint
 import re
 import sys
 from copy import deepcopy
-
+from enum import Enum
 from rest import McM
 
 # Add path to code that allow easy access to McM
@@ -36,6 +36,13 @@ fh: logging.Handler = logging.FileHandler(
 )
 fh.setFormatter(formatter)
 logger.addHandler(fh)
+
+
+# Results for the process of resetting a root request
+class ResetResult(Enum):
+    SOFT_RESET = 1
+    FULL_RESET = 2
+    KEEPED_OUTPUT = 3
 
 
 def chunks(l, n):
@@ -192,7 +199,7 @@ def approve_until(
     raise RuntimeError("Unable to get the desired approval status")
 
 
-def process_soft_reset_root(mcm: McM, ch_rr_prepid: str) -> None:
+def process_soft_reset_root(mcm: McM, ch_rr_prepid: str) -> ResetResult:
     """
     This performs a customization for `soft reset` the root request.
     It operates the root request so that its status is `approve/approved`
@@ -201,54 +208,73 @@ def process_soft_reset_root(mcm: McM, ch_rr_prepid: str) -> None:
     Args:
         mcm (McM): McM instance.
         ch_rr_prepid (str): Chain request's `root` request prepid to operate.
+
+    Returns:
+        ResetResult: This indicates how the root request was operated.
     """
     req_data = mcm.get(object_type="requests", object_id=ch_rr_prepid)
     req_approval = req_data.get("approval")
     req_status = req_data.get("status")
 
     if req_approval == "submit" and req_status == "done":
-        logger.warning(
-            (
-                "Root request (%s) is already done, reset it, "
-                "announce the invalidation and set it to approve/approved"
-            ),
-            ch_rr_prepid,
-        )
+        keep_output: list[bool] | None = req_data.get("keep_output")
+        if not keep_output:
+            raise ValueError("Keep output attribute is not set: %s", keep_output)
 
-        req_validation: dict | None = req_data.get("validation")
-        logger.info("Root request validation: %s", req_validation)
-        if not req_validation:
-            raise ValueError("Request's validation is not valid: %s", req_validation)
+        if all(keep_output):
+            # This is a special case, don't operate it
+            logger.warning("Root request keeps output, avoiding to reset it")
+            return ResetResult.KEEPED_OUTPUT
 
-        # 1. Reset it.
-        reset_result = mcm.reset(prepid=ch_rr_prepid)
-        if not reset_result:
-            msg = f"Unable to reset the root request: {ch_rr_prepid}"
-            logger.error(msg)
-            raise RuntimeError(msg)
+        else:
+            logger.warning(
+                (
+                    "Root request (%s) is already done, reset it, "
+                    "announce the invalidation and set it to approve/approved"
+                ),
+                ch_rr_prepid,
+            )
 
-        # 2. Announce the invalidation.
-        invs = get_invalidations(mcm=mcm, requests=[ch_rr_prepid])
-        if invs:
-            announce_result = announce_invalidations(mcm=mcm, invalidations=invs)
-            logger.info("Invalidation result: %s", announce_result)
-            if not announce_result.get("results"):
-                msg = f"Unable to invalidate records for root request: {ch_rr_prepid}"
+            req_validation: dict | None = req_data.get("validation")
+            logger.info("Root request validation: %s", req_validation)
+            if not req_validation:
+                raise ValueError(
+                    "Request's validation is not valid: %s", req_validation
+                )
+
+            # 1. Reset it.
+            reset_result = mcm.reset(prepid=ch_rr_prepid)
+            if not reset_result:
+                msg = f"Unable to reset the root request: {ch_rr_prepid}"
                 logger.error(msg)
-                logger.error("Invalidation records: %s", invs)
                 raise RuntimeError(msg)
 
-        # 3. Force its status to approve/approved, reincluding the validation.
-        req_data = mcm.get(object_type="requests", object_id=ch_rr_prepid)
-        req_data["validation"] = req_validation
-        req_data["approval"] = "approve"
-        req_data["status"] = "approved"
+            # 2. Announce the invalidation.
+            invs = get_invalidations(mcm=mcm, requests=[ch_rr_prepid])
+            if invs:
+                announce_result = announce_invalidations(mcm=mcm, invalidations=invs)
+                logger.info("Invalidation result: %s", announce_result)
+                if not announce_result.get("results"):
+                    msg = (
+                        f"Unable to invalidate records for root request: {ch_rr_prepid}"
+                    )
+                    logger.error(msg)
+                    logger.error("Invalidation records: %s", invs)
+                    raise RuntimeError(msg)
 
-        updated_result = mcm.update(object_type="requests", object_data=req_data)
-        if not updated_result or not updated_result.get("results"):
-            msg = f"Error forcing the root request status: {ch_rr_prepid}"
-            logger.error(msg)
-            raise RuntimeError(msg)
+            # 3. Force its status to approve/approved, re-including the validation.
+            req_data = mcm.get(object_type="requests", object_id=ch_rr_prepid)
+            req_data["validation"] = req_validation
+            req_data["approval"] = "approve"
+            req_data["status"] = "approved"
+
+            updated_result = mcm.update(object_type="requests", object_data=req_data)
+            if not updated_result or not updated_result.get("results"):
+                msg = f"Error forcing the root request status: {ch_rr_prepid}"
+                logger.error(msg)
+                raise RuntimeError(msg)
+
+            return ResetResult.FULL_RESET
 
     else:
         soft_reset_result = mcm.soft_reset(prepid=ch_rr_prepid)
@@ -260,6 +286,27 @@ def process_soft_reset_root(mcm: McM, ch_rr_prepid: str) -> None:
             )
             logger.error(msg)
             raise RuntimeError(msg)
+
+        return ResetResult.SOFT_RESET
+
+
+def include_tag(mcm: McM, request_prepid: str, new_tag: str) -> None:
+    """
+    Includes a new tag for the given `request`
+
+    Args:
+        mcm (McM): McM instance
+        request_prepid (str): Request PrepID to include the tag
+        new_tag (str): New tag to include
+    """
+    request_data: dict = mcm.get("requests", object_id=request_prepid)
+    request_data["tags"] += [new_tag]
+    tag_result = mcm.update("requests", request_data)
+    logger.info("Include `Tag` result: %s", tag_result)
+    if not tag_result or not tag_result.get("results"):
+        msg = f"Unable to include a tracking tag for the root request: {request_prepid}"
+        logger.error(msg)
+        raise RuntimeError(msg)
 
 
 def campaigns_to_check(
@@ -355,6 +402,176 @@ def get_campaign_condition(
     return result
 
 
+def process_chain_pre_reset(mcm: McM, chain_req_data: list[dict]) -> None:
+    """
+    Computes the steps required for a `chain request` to process
+    the reset of its `root` request.
+
+    Args:
+        mcm (McM): McM instance.
+        chain_req_data (list[dict]): Chain requests data objects
+            to process.
+    """
+    chain_req_type = "chained_requests"
+
+    # 0. Order the chain requests by `step` descending
+    chain_req_data = sorted(chain_req_data, key=lambda el: el["step"], reverse=True)
+
+    for ch_r in chain_req_data:
+        ch_req_prepid = ch_r.get("prepid")
+        updated_ch_r = mcm.get(object_type=chain_req_type, object_id=ch_req_prepid)
+
+        # 1. Set the flag to `False` and save
+        updated_ch_r["action_parameters"]["flag"] = False
+        updated_ch_r = mcm.update(object_type=chain_req_type, object_data=updated_ch_r)
+        logger.info("Disable 'flag' response: %s", updated_ch_r)
+        if not updated_ch_r or not updated_ch_r.get("results"):
+            msg = f"Error updating chain requests: {ch_req_prepid}"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        # 2. Rewind the chain request to `root`.
+        rewind_endpoint = f"/restapi/chained_requests/rewind_to_root/{ch_req_prepid}"
+        rewind_response = get(mcm=mcm, endpoint=rewind_endpoint)
+        logger.info("Rewind chain request response: %s", rewind_response)
+        if not rewind_response or not rewind_response.get("results"):
+            msg = f"Unable to rewind chain request to root ({ch_r}) - Details: {rewind_response}"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        # 3. Announce the invalidation.
+        ch_req_requests: list[str] = ch_r.get("chain")
+        ch_invs = get_invalidations(mcm=mcm, requests=ch_req_requests)
+        if ch_invs:
+            announce_result = announce_invalidations(mcm=mcm, invalidations=ch_invs)
+            logger.info("Invalidation result: %s", announce_result)
+            if not announce_result.get("results"):
+                msg = f"Unable to invalidate records for chain request: {ch_req_prepid}"
+                logger.error(msg)
+                logger.error("Invalidation records: %s", ch_invs)
+                raise RuntimeError(msg)
+
+        # 4. Delete the other requests EXCEPT for the `root`
+        # The first record in this list is the `root` request
+        chain_delete = ch_req_requests[1:]
+
+        # INFO: They must be deleted in order from the deepest
+        # data tier to upwards
+        chain_delete = reversed(chain_delete)
+
+        for rd in chain_delete:
+            mcm.delete(object_type="requests", object_id=rd)
+
+        # 5. Re-enable the flag to `True` and save.
+        updated_ch_r = mcm.get(object_type=chain_req_type, object_id=ch_req_prepid)
+        updated_ch_r["action_parameters"]["flag"] = True
+        updated_ch_r = mcm.update(object_type=chain_req_type, object_data=updated_ch_r)
+        logger.info("Re-enable the flag to `True` response: %s", updated_ch_r)
+        if not updated_ch_r or not updated_ch_r.get("results"):
+            msg = f"Error updating chain requests: {ch_req_prepid}"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+
+def perform_injection(
+    mcm: McM, chain_req_data: dict, root_reset_result: ResetResult
+) -> None:
+    """
+    Computes the steps required for injecting a `chain request` after
+    it is reserved again
+
+    Args:
+        mcm (McM): McM instance.
+        chain_req_data (dict): Chain request data object
+            to process.
+        root_reset_result (ResetResult): This indicates how the
+            root request was resetted.
+    """
+    chain_req_type = "chained_requests"
+    ch_req_prepid = chain_req_data.get("prepid")
+
+    if root_reset_result == ResetResult.KEEPED_OUTPUT:
+        # 2. Just flow the chain request
+        flow_result = mcm.flow(chained_request_prepid=ch_req_prepid)
+        if not flow_result:
+            msg = f"Unable to flow the following chained request: {ch_req_prepid}"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+    elif root_reset_result in (ResetResult.FULL_RESET, ResetResult.SOFT_RESET):
+        # 2. Retrieve the new created requests and make sure their state
+        # is approve/approved
+        updated_ch_r = mcm.get(object_type=chain_req_type, object_id=ch_req_prepid)
+        ch_req_requests = updated_ch_r.get("chain")
+        to_approve = ch_req_requests[1:]
+        ch_rr_prepid: str = ch_req_requests[0]
+        logger.info("Making sure non-root request are approve/approved")
+        for req_prepid in to_approve:
+            approve_until(
+                mcm=mcm,
+                request_prepid=req_prepid,
+                approval="approve",
+                status="approved",
+            )
+
+        # 3. Operate the `root` request in the chain and
+        # make sure its state is submit/submitted.
+        # INFO: This takes time ~3 to 5 min.
+        logger.info("Injecting chain request")
+        approve_until(
+            mcm=mcm,
+            request_prepid=ch_rr_prepid,
+            approval="submit",
+            status="submitted",
+            root_request=True,
+        )
+
+    else:
+        raise NotImplementedError(
+            "There's no way for post-processing : %s", root_reset_result
+        )
+
+
+def process_chain_post_reset(mcm: McM, chain_req_data: list[dict]) -> None:
+    """
+    Computes the steps required for a group of `chain request`
+    after processing the reset of its `root` request.
+
+    Args:
+        mcm (McM): McM instance.
+        chain_req_data (list[dict]): Chain requests data objects
+            to process.
+    """
+    chain_req_type = "chained_requests"
+
+    # Precondition: All the chains for this request have the same
+    # `root` request.
+    root_request_prepid: str = chain_req_data[0].get("chain")[0]
+    reset_result = process_soft_reset_root(mcm=mcm, ch_rr_prepid=root_request_prepid)
+    include_tag(mcm=mcm, request_prepid=root_request_prepid, new_tag=tracking_tag)
+
+    # 1. Reserve all at the same time
+    logger.info("Reserving all the chain requests...")
+    for ch_r in chain_req_data:
+        reserve_result = reserve_chain_request(
+            mcm=mcm, chain_request_data=ch_r, data_tier="nanoaod"
+        )
+        logger.info("Reserve result: %s", reserve_result)
+        if not reserve_result:
+            msg = f"Unable to reserve the following chained request: {ch_req_prepid}"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+    # 2. Perform the injection
+    logger.info("Injecting all the chain requests...")
+    for ch_r in chain_req_data:
+        ch_req_prepid = ch_r.get("prepid")
+        updated_ch_r = mcm.get(object_type=chain_req_type, object_id=ch_req_prepid)
+        perform_injection(
+            mcm=mcm, chain_req_data=updated_ch_r, root_reset_result=reset_result
+        )
+
+
 def patch_chain_request(
     mcm: McM, request_prepid: str, tracking_tag: str, operate: bool = False
 ) -> None:
@@ -378,124 +595,14 @@ def patch_chain_request(
     )
 
     if operate:
-        for ch_r in chain_req:
-            updated_ch_r = deepcopy(ch_r)
-            ch_req_prepid = ch_r.get("prepid")
-
-            # 1. Set the flag to `False` and save
-            updated_ch_r["action_parameters"]["flag"] = False
-            updated_ch_r = mcm.update(
-                object_type=chain_req_type, object_data=updated_ch_r
-            )
-            logger.info("Disable 'flag' response: %s", updated_ch_r)
-            if not updated_ch_r or not updated_ch_r.get("results"):
-                msg = f"Error updating chain requests: {ch_req_prepid}"
-                logger.error(msg)
-                raise RuntimeError(msg)
-
-            # 2. Rewind the chain request to `root`.
-            rewind_endpoint = (
-                f"/restapi/chained_requests/rewind_to_root/{ch_req_prepid}"
-            )
-            rewind_response = get(mcm=mcm, endpoint=rewind_endpoint)
-            logger.info("Rewind chain request response: %s", rewind_response)
-            if not rewind_response or not rewind_response.get("results"):
-                msg = f"Unable to rewind chain request to root ({ch_r}) - Details: {rewind_response}"
-                logger.error(msg)
-                raise RuntimeError(msg)
-
-            # 3. Announce the invalidation.
-            ch_req_requests: list[str] = ch_r.get("chain")
-            ch_invs = get_invalidations(mcm=mcm, requests=ch_req_requests)
-            if ch_invs:
-                announce_result = announce_invalidations(mcm=mcm, invalidations=ch_invs)
-                logger.info("Invalidation result: %s", announce_result)
-                if not announce_result.get("results"):
-                    msg = f"Unable to invalidate records for chain request: {ch_req_prepid}"
-                    logger.error(msg)
-                    logger.error("Invalidation records: %s", ch_invs)
-                    raise RuntimeError(msg)
-
-            # 4. Delete the other requests EXCEPT for the `root`
-            # The first record in this list is the `root` request
-            chain_delete = ch_req_requests[1:]
-
-            # INFO: They must be deleted in order from the deepest
-            # data tier to upwards
-            chain_delete = reversed(chain_delete)
-
-            for rd in chain_delete:
-                mcm.delete(object_type="requests", object_id=rd)
-
-            # 5. Re-enable the flag to `True` and save.
-            updated_ch_r = mcm.get(object_type=chain_req_type, object_id=ch_req_prepid)
-            updated_ch_r["action_parameters"]["flag"] = True
-            updated_ch_r = mcm.update(
-                object_type=chain_req_type, object_data=updated_ch_r
-            )
-            logger.info("Re-enable the flag to `True` response: %s", updated_ch_r)
-            if not updated_ch_r or not updated_ch_r.get("results"):
-                msg = f"Error updating chain requests: {ch_req_prepid}"
-                logger.error(msg)
-                raise RuntimeError(msg)
-
-            # 6. Pick the `root` request and set its status to `approve/approved`.
-            ch_rr_prepid: str = ch_req_requests[0]
-            process_soft_reset_root(mcm=mcm, ch_rr_prepid=ch_rr_prepid)
-
-            # 7. Pick the `root` request and include a tag for tracking and save it.
-            ch_rr_data: dict = mcm.get("requests", object_id=ch_rr_prepid)
-            ch_rr_data["tags"] += [tracking_tag]
-            tag_result = mcm.update("requests", ch_rr_data)
-            logger.info("Include `Tag` result: %s", tag_result)
-            if not tag_result or not tag_result.get("results"):
-                msg = f"Unable to include a tracking tag for the root request: {ch_rr_prepid}"
-                logger.error(msg)
-                raise RuntimeError(msg)
-
-            # 8. After applying the patch, reserve the chain request again (flow it).
-            reserve_result = reserve_chain_request(
-                mcm=mcm, chain_request_data=ch_r, data_tier="nanoaod"
-            )
-            logger.info("Reserve result: %s", reserve_result)
-            if not reserve_result:
-                msg = (
-                    f"Unable to reserve the following chained request: {ch_req_prepid}"
-                )
-                logger.error(msg)
-                raise RuntimeError(msg)
-
-            # 9. Retrieve the new created requests and make sure their state
-            # is approve/approved
-            updated_ch_r = mcm.get(object_type=chain_req_type, object_id=ch_req_prepid)
-            ch_req_requests = updated_ch_r.get("chain")
-            to_approve = ch_req_requests[1:]
-            ch_rr_prepid: str = ch_req_requests[0]
-            logger.info("Making sure non-root request are approve/approved")
-            for req_prepid in to_approve:
-                approve_until(
-                    mcm=mcm,
-                    request_prepid=req_prepid,
-                    approval="approve",
-                    status="approved",
-                )
-
-            # 10. Operate the `root` request in the chain and
-            # make sure its state is submit/submitted.
-            # INFO: This takes time ~3 to 5 min.
-            logger.info("Injecting chain request")
-            approve_until(
-                mcm=mcm,
-                request_prepid=ch_rr_prepid,
-                approval="submit",
-                status="submitted",
-                root_request=True,
-            )
+        process_chain_pre_reset(mcm=mcm, chain_req_data=chain_req)
+        process_chain_post_reset(mcm=mcm, chain_req_data=chain_req)
 
 
 if __name__ == "__main__":
     start_time: datetime.datetime = datetime.datetime.now()
     mcm: McM = McM(dev=True, id=McM.SSO)
+    logger.info("McM target environment: %s", mcm.host)
 
     # Some control variables
     campaigns_operate: str = "Run3Summer23DR*"
