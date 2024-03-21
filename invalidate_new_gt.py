@@ -12,6 +12,7 @@ import logging
 import pprint
 import re
 import sys
+from itertools import groupby
 from copy import deepcopy
 from enum import Enum
 from rest import McM
@@ -414,23 +415,43 @@ def process_chain_pre_reset(mcm: McM, chain_req_data: list[dict]) -> None:
     """
     chain_req_type = "chained_requests"
 
-    # 0. Order the chain requests by `step` descending
-    chain_req_data = sorted(chain_req_data, key=lambda el: el["step"], reverse=True)
+    # 1. Group the chained request by the second request in the chain
+    # (The first that is not the `root` request).
+    grouped_chain = {
+        k: list(g) for k, g in groupby(chain_req_data, lambda el: el["chain"][1])
+    }
+    if len(grouped_chain) != 1:
+        msg = f"There should be only one group. Group result: {grouped_chain}"
+        logger.error(msg)
+        raise ValueError(msg)
 
-    for ch_r in chain_req_data:
+    # 2. Order the chain requests by `step` descending
+    chain_req_operate = list(grouped_chain.values())[0]
+    chain_req_operate = sorted(
+        chain_req_operate, key=lambda el: el["step"], reverse=True
+    )
+    logger.info(
+        "Chain request pre-reset order (after sort): %s",
+        [el.get("prepid") for el in chain_req_operate],
+    )
+
+    # 3. Set the flag to `False` and save
+    for ch_r in chain_req_operate:
         ch_req_prepid = ch_r.get("prepid")
         updated_ch_r = mcm.get(object_type=chain_req_type, object_id=ch_req_prepid)
-
-        # 1. Set the flag to `False` and save
         updated_ch_r["action_parameters"]["flag"] = False
         updated_ch_r = mcm.update(object_type=chain_req_type, object_data=updated_ch_r)
         logger.info("Disable 'flag' response: %s", updated_ch_r)
+
         if not updated_ch_r or not updated_ch_r.get("results"):
             msg = f"Error updating chain requests: {ch_req_prepid}"
             logger.error(msg)
             raise RuntimeError(msg)
 
-        # 2. Rewind the chain request to `root`.
+    for ch_r in chain_req_operate:
+        ch_req_prepid = ch_r.get("prepid")
+
+        # 4. Rewind the chain request to `root`.
         rewind_endpoint = f"/restapi/chained_requests/rewind_to_root/{ch_req_prepid}"
         rewind_response = get(mcm=mcm, endpoint=rewind_endpoint)
         logger.info("Rewind chain request response: %s", rewind_response)
@@ -439,7 +460,7 @@ def process_chain_pre_reset(mcm: McM, chain_req_data: list[dict]) -> None:
             logger.error(msg)
             raise RuntimeError(msg)
 
-        # 3. Announce the invalidation.
+        # 5. Announce the invalidation.
         ch_req_requests: list[str] = ch_r.get("chain")
         ch_invs = get_invalidations(mcm=mcm, requests=ch_req_requests)
         if ch_invs:
@@ -451,7 +472,7 @@ def process_chain_pre_reset(mcm: McM, chain_req_data: list[dict]) -> None:
                 logger.error("Invalidation records: %s", ch_invs)
                 raise RuntimeError(msg)
 
-        # 4. Delete the other requests EXCEPT for the `root`
+        # 6. Delete the other requests EXCEPT for the `root`
         # The first record in this list is the `root` request
         chain_delete = ch_req_requests[1:]
 
@@ -462,11 +483,14 @@ def process_chain_pre_reset(mcm: McM, chain_req_data: list[dict]) -> None:
         for rd in chain_delete:
             mcm.delete(object_type="requests", object_id=rd)
 
-        # 5. Re-enable the flag to `True` and save.
+    # 7. Re-enable the flag to `True` and save.
+    for ch_r in chain_req_operate:
+        ch_req_prepid = ch_r.get("prepid")
         updated_ch_r = mcm.get(object_type=chain_req_type, object_id=ch_req_prepid)
         updated_ch_r["action_parameters"]["flag"] = True
         updated_ch_r = mcm.update(object_type=chain_req_type, object_data=updated_ch_r)
         logger.info("Re-enable the flag to `True` response: %s", updated_ch_r)
+
         if not updated_ch_r or not updated_ch_r.get("results"):
             msg = f"Error updating chain requests: {ch_req_prepid}"
             logger.error(msg)
@@ -532,7 +556,9 @@ def perform_injection(
         )
 
 
-def process_chain_post_reset(mcm: McM, chain_req_data: list[dict]) -> None:
+def process_chain_post_reset(
+    mcm: McM, chain_req_data: list[dict], tracking_tag: str
+) -> None:
     """
     Computes the steps required for a group of `chain request`
     after processing the reset of its `root` request.
@@ -541,6 +567,8 @@ def process_chain_post_reset(mcm: McM, chain_req_data: list[dict]) -> None:
         mcm (McM): McM instance.
         chain_req_data (list[dict]): Chain requests data objects
             to process.
+        tracking_tag (str): Tracking tag to include for the root
+            request.
     """
     chain_req_type = "chained_requests"
 
@@ -596,12 +624,14 @@ def patch_chain_request(
 
     if operate:
         process_chain_pre_reset(mcm=mcm, chain_req_data=chain_req)
-        process_chain_post_reset(mcm=mcm, chain_req_data=chain_req)
+        process_chain_post_reset(
+            mcm=mcm, chain_req_data=chain_req, tracking_tag=tracking_tag
+        )
 
 
 if __name__ == "__main__":
     start_time: datetime.datetime = datetime.datetime.now()
-    mcm: McM = McM(dev=True, id=McM.SSO)
+    mcm: McM = McM(dev=False, id=McM.SSO)
     logger.info("McM target environment: %s", mcm.host)
 
     # Some control variables
@@ -610,7 +640,7 @@ if __name__ == "__main__":
     include: bool = True
     apply_patch: bool = True
     tracking_tag: str = "PPD_OPS_GT"
-    process_campaigns_idx = 0
+    process_campaigns_idx = 1
     process_ch_req_idx = 0
 
     # 1. Retrieve the campaigns based on the GlobalTag
@@ -620,12 +650,7 @@ if __name__ == "__main__":
         global_tag_regex,
         include,
     )
-    campaigns = campaigns_to_check(
-        mcm=mcm,
-        campaign_query=campaigns_operate,
-        condition_gt=global_tag_regex,
-        includes=include,
-    )
+    campaigns = ['Run3Summer23DRPremix']
     logger.info("Campaigns retrieved: %s", pretty(campaigns))
 
     # 2. Scan all the root requests linked.
@@ -642,6 +667,12 @@ if __name__ == "__main__":
             condition_gt=global_tag_regex,
             includes=include,
         )
+        logger.info(
+            "All requests retrieved for (%s): %s",
+            campaign_prepid,
+            pretty(linked_requests),
+        )
+        logger.info("Total to patch: %s", len(linked_requests))
 
         # 3. Apply the patch.
         for r_idx, request_prepid in enumerate(linked_requests):
