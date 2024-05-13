@@ -94,7 +94,7 @@ class InvalidateDeleteRequests:
         Returns:
             list[str]: Invalidations related to the requests.
         """
-        # 1. Flatten and just get the `_id` field
+        # Flatten and just get the `_id` field
         inv_ids: list[str] = [i.get("_id") for i in invalidations if i.get("_id")]
         announce_result = self.mcm.put(
             object_type="invalidations", object_data=inv_ids, method="announce"
@@ -384,7 +384,7 @@ class InvalidateDeleteRequests:
             )
 
         failed_requests: list[str] = []
-        sucess_requests: list[str] = []
+        success_requests: list[str] = []
         total_to_process = len(root_request_prepids)
         for idx, root_prepid in enumerate(root_request_prepids, start=1):
             try:
@@ -396,7 +396,7 @@ class InvalidateDeleteRequests:
                     remove_root=remove_root,
                     remove_chain=remove_chain,
                 )
-                sucess_requests.append(root_prepid)
+                success_requests.append(root_prepid)
             except Exception as e:
                 self.logger.error(
                     "Unable to process root request (%s): %s",
@@ -411,7 +411,7 @@ class InvalidateDeleteRequests:
                     break
 
         return {
-            "sucess": sucess_requests,
+            "success": success_requests,
             "failed": failed_requests,
             "filtered": discarded_prepids,
         }

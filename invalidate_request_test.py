@@ -75,7 +75,7 @@ class InvalidateDeleteRequestTest(unittest.TestCase):
         result = self.invalidator.invalidate_delete_cascade_requests(
             requests_prepid=non_root_req
         )
-        self.assertEqual(result.get("sucess"), [], "No request should be processed")
+        self.assertEqual(result.get("success"), [], "No request should be processed")
         self.assertEqual(result.get("failed"), [], "No request should be processed")
         self.assertEqual(
             set(result.get("filtered")),
@@ -93,7 +93,7 @@ class InvalidateDeleteRequestTest(unittest.TestCase):
         result = self.invalidator.invalidate_delete_cascade_requests(
             requests_prepid=non_exists
         )
-        self.assertEqual(result.get("sucess"), [], "No request should be processed")
+        self.assertEqual(result.get("success"), [], "No request should be processed")
         self.assertEqual(result.get("failed"), [], "No request should be processed")
         self.assertEqual(
             set(result.get("filtered")),
@@ -118,7 +118,7 @@ class InvalidateDeleteRequestTest(unittest.TestCase):
 
         # Check it was properly processed.
         self.assertEqual(
-            result.get("sucess"),
+            result.get("success"),
             [example_root_request_prepid],
             "The example request should be processed properly",
         )
@@ -166,7 +166,7 @@ class InvalidateDeleteRequestTest(unittest.TestCase):
 
         # Check it was properly processed.
         self.assertEqual(
-            result.get("sucess"),
+            result.get("success"),
             [example_root_request_prepid],
             "The example request should be processed properly",
         )
