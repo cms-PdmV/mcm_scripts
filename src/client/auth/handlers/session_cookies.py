@@ -3,6 +3,7 @@ This module provides a handler
 to load a cookie from the filesystem.
 """
 
+import os
 from http.cookiejar import LoadError, MozillaCookieJar
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from requests.sessions import Session
 
 from client.auth.auth_interface import AuthInterface
 from utils.shell import run_command
+from utils.logger import LoggerFactory
 
 
 class SessionCookieHandler(AuthInterface):
@@ -27,6 +29,7 @@ class SessionCookieHandler(AuthInterface):
         self._url = url
         self._credential_path = credential_path
         self._credential: MozillaCookieJar | None = None
+        self._logger = LoggerFactory.getLogger("http_client.client")
 
     def _load_credential(self) -> MozillaCookieJar | None:
         try:
@@ -45,7 +48,7 @@ class SessionCookieHandler(AuthInterface):
 
         # Most likely the package is not available or
         # there's no valid Kerberos ticket.
-        if exit_code != 0:
+        if exit_code != 0 or stderr:
             msg = (
                 f"Session cookie requested via: '{command}'\n"
                 f"Standard error: {stderr}\n"
@@ -56,27 +59,30 @@ class SessionCookieHandler(AuthInterface):
         return self._load_credential()
 
     def _save_credential(self) -> None:
-        # No operation is performed because `self.request_credential`
-        # already saves the valid cookie
-        ...
+        # Credential is already stored, just change its permissions.
+        os.chmod(path=self._credential_path, mode=0o600)
 
     def authenticate(self) -> None:
         loaded_cookie = self._load_credential()
         if self._validate(cookie=loaded_cookie):
             self._credential = loaded_cookie
+            self._save_credential()
             return
 
         # The credential is not valid anymore, renew it.
+        self._logger.debug("Session cookie is not valid, requesting a new one")
         renewed_cookie = self._request_credential()
         if self._validate(cookie=renewed_cookie):
             self._credential = renewed_cookie
+            self._save_credential()
             return
 
         # It is not possible to authenticate a request
         # using session cookies.
         msg = (
-            "Unable to consume a resource in the target web application "
-            "using session cookies. Remember this method only works if 2FA is not enabled. "
+            f"Unable to consume a resource in the target web application ({self._url}) "
+            "using session cookies.\n"
+            "Remember this method only works if 2FA is not enabled.\n"
             "If you enforce it, please use another authentication strategy instead."
         )
         raise PermissionError(msg)
@@ -97,11 +103,4 @@ class SessionCookieHandler(AuthInterface):
             cookie: Cookie to check.
         """
         test_response = requests.get(self._url, cookies=cookie)
-
-        # Intercepted and redirected to the authentication page.
-        if test_response.url.startswith(
-            "https://auth.cern.ch/auth/realms/cern"
-        ) or test_response.status_code in (401, 403):
-            return False
-
-        return True
+        return self.validate_response(test_response)

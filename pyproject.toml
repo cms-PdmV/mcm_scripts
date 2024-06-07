@@ -5,6 +5,11 @@ description = "A HTTP client wrapper to handle authenticated requests to CERN in
 authors = ["PdmV Development Team <pdmv.service@cern.ch>"]
 license = "MIT"
 readme = "README.md"
+packages = [
+    {include = "client", from = "src"},
+    {include = "utils", from = "src"},
+    {include = "fixtures", from = "tests"}
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -20,6 +25,10 @@ isort = "^5.13.2"
 [tool.isort]
 profile = "black"
 skip = ["venv"]
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
 
 [build-system]
 requires = ["poetry-core"]

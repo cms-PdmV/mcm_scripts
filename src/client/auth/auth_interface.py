@@ -4,8 +4,7 @@ for a HTTP client session.
 """
 
 from abc import ABC, abstractmethod
-
-from requests import Session
+from requests import Session, Response
 
 
 class AuthInterface(ABC):
@@ -21,7 +20,6 @@ class AuthInterface(ABC):
             - Format: Netscape Cookie
 
     For more details, check the `handlers` module.
-    TODO: Use a detailed design pattern to split this and group hierachies.
     """
 
     @abstractmethod
@@ -77,3 +75,27 @@ class AuthInterface(ABC):
         the credential to perform authenticated requests.
         """
         ...
+
+    @classmethod
+    def validate_response(cls, response: Response) -> bool:
+        """
+        Checks that a given response has been redirected to
+        the CERN Authentication login server or been rejected by it
+        server because a lack of permissions.
+
+        Args:
+            response: Response to check
+
+        Returns:
+            True: If the response was resolved by the requested web server
+                and its status code is not 401 nor 403.
+            False: If the response code was 401 or 403 or the resolver
+                was the CERN Authentication service.
+        """
+        # Intercepted and redirected to the authentication page.
+        if response.url.startswith(
+            "https://auth.cern.ch/auth/realms/cern"
+        ) or response.status_code in (401, 403):
+            return False
+
+        return True

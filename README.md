@@ -1,10 +1,21 @@
 # McM Scripts
 Repository for using McM scripts and example scripts
 
-### Basic info
-McM is going to be serviced from a new domain: `cms-pdmv-prod.web.cern.ch`. The exact date of migration
-is going to be communicated in the near future via CMS Talk.
+### How to run this
+> [!NOTE]  
+> This new version is still in development!
 
+Create a new virtual environment using Python 3.11, install `poetry` and the required dependencies.
+
+`python3.11 -m venv venv && source ./venv/bin/activate && pip install poetry && poetry install`
+
+Run several tests via:
+`poetry run pytest -s -vv`
+
+> [!IMPORTANT]
+> Make sure your execution environment has a valid Kerberos ticket to consume CERN services!
+
+### Basic info
 * Link to McM: https://cms-pdmv-prod.web.cern.ch/mcm/
 * McM Rest API: https://cms-pdmv-prod.web.cern.ch/mcm/restapi
 * Public APIs do not require SSO credentials. Index of public API: https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/

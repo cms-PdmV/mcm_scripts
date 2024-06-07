@@ -3,6 +3,8 @@ Provides some pure-functions to interact with
 the OS via shell executions.
 """
 
+import sys
+import platform
 import subprocess
 
 
@@ -41,3 +43,12 @@ def run_command(
     stderr: str = result.stderr
     exit_code: int = result.returncode
     return stdout, stderr, exit_code
+
+
+def describe_platform() -> str:
+    """
+    Retrieves an identifier for describing the current
+    execution environment. This is useful for including
+    User-Agent headers.
+    """
+    return f"(Python: {sys.version}) ({platform.system()}: {platform.architecture()}: {platform.machine()})"
