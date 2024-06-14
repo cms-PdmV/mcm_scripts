@@ -3,8 +3,8 @@ This module provides a handler
 to authenticate requests using OAuth2 tokens.
 """
 
-import os
 import json
+import os
 from json import JSONDecodeError
 from pathlib import Path
 
@@ -25,7 +25,7 @@ class AccessTokenHandler(AuthInterface):
 
     Attributes:
         _url: Target web application URL.
-        _credential: A JSON object including the access token, the refrest token
+        _credential: A JSON object including the access token, the refresh token
             and some metadata.
         _credential_path: Path to load the access token from or to persist in.
         _client_id: ID for the client application, registered in the application portal,
@@ -135,7 +135,7 @@ class IDTokenHandler(AuthInterface):
 
     Attributes:
         _url: Target web application URL.
-        _credential: A JSON object including the access token, the refrest token
+        _credential: A JSON object including the access token, the refresh token
             and some metadata.
         _credential_path: Path to load the access token from or to persist in.
         _client_id: ID for the client application, registered in the application portal,

@@ -4,7 +4,8 @@ for a HTTP client session.
 """
 
 from abc import ABC, abstractmethod
-from requests import Session, Response
+
+from requests import Response, Session
 
 
 class AuthInterface(ABC):

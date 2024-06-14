@@ -1,9 +1,9 @@
+import json
 import os
 import tempfile
 from pathlib import Path
 
 import pytest
-import json
 
 
 def create_empty_file(permissions) -> Path:

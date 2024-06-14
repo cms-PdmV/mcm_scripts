@@ -3,8 +3,10 @@ REST client for McM application.
 """
 
 import os
-import requests
 from pathlib import Path
+
+import requests
+
 from client.session import SessionFactory
 from utils.logger import LoggerFactory
 from utils.shell import describe_platform
@@ -37,11 +39,11 @@ class McM:
         self.credentials_path = self._credentials_path()
 
         self.logger = LoggerFactory.getLogger("http_client.mcm")
-        self.server = self._target_web_appplication()
+        self.server = self._target_web_application()
         self.credentials_path = self._credentials_path()
         self.session = self._create_session()
 
-    def _target_web_appplication(self) -> str:
+    def _target_web_application(self) -> str:
         """
         Sets the production or development web application.
         """
@@ -84,7 +86,7 @@ class McM:
             )
         else:
             self.logger.warning("Using McM client without providing authentication")
-            return requests.Session()
+            mcm_session = requests.Session()
 
         # Include some headers for the session
         user_agent = {"User-Agent": f"PdmV HTTP client (McM): {describe_platform()}"}
@@ -122,7 +124,7 @@ class McM:
         object_id - usually prep id of desired object
         query - query to be run in order to receive an object, e.g. tags=M17p1A, multiple parameters can be used with & tags=M17p1A&pwg=HIG
         method - action to be performed, such as get, migrate or inspect
-        page - which page to be fetched. -1 means no paginantion, return all results
+        page - which page to be fetched. -1 means no pagination, return all results
         """
         object_type = object_type.strip()
         if object_id:
@@ -216,7 +218,7 @@ class McM:
 
     def forceflow(self, prepid):
         """
-        Forceflow a chained request with given prepid
+        Force a flow on a chained request with given prepid
         """
         res = self.__get("restapi/chained_requests/flow/%s/force" % (prepid))
         return res.get("results", None)

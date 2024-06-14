@@ -4,7 +4,9 @@ to the web service automatically.
 """
 
 from pathlib import Path
+
 import requests
+
 from client.auth.auth_interface import AuthInterface
 from client.auth.handlers.oauth2_tokens import AccessTokenHandler, IDTokenHandler
 from client.auth.handlers.session_cookies import SessionCookieHandler
@@ -27,7 +29,7 @@ class AuthenticatedSession(requests.Session):
             if self._handler.validate_response(response):
                 return response
             else:
-                # Re-authenticate and return the reponse.
+                # Re-authenticate and return the response.
                 self._logger.debug(
                     "(%s/%s) Credentials expired, renewing them and retrying the request",
                     attempt,
@@ -48,7 +50,7 @@ class AuthenticatedSession(requests.Session):
 
 class SessionFactory:
     """
-    Provides a preconfigured `request.Session` with the
+    Provides a pre-configured `request.Session` with the
     required authentication method.
     """
 

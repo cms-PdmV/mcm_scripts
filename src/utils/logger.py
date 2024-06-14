@@ -3,8 +3,8 @@ This module configures the library logger,
 its message format and its level.
 """
 
-import sys
 import logging
+import sys
 
 
 class LoggerFactory:
@@ -21,6 +21,7 @@ class LoggerFactory:
 
             handler.setFormatter(formatter)
             logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
 
         return logger
 

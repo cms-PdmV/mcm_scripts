@@ -5,20 +5,22 @@ correctness.
 """
 
 import os
+
 import pytest
-from requests.exceptions import SSLError
-from client.session import SessionFactory
-from client.auth.auth_interface import AuthInterface
 from fixtures.files import create_empty_file, empty_json_file, read_only_file
 from fixtures.oauth import (
-    correct_application,
-    fails_by_resource_requiring_2fa,
-    fails_by_permissions,
     client_id,
     client_secret,
+    correct_application,
     credentials_available,
+    fails_by_permissions,
+    fails_by_resource_requiring_2fa,
     stdin_enabled,
 )
+from requests.exceptions import SSLError
+
+from client.auth.auth_interface import AuthInterface
+from client.session import SessionFactory
 from utils.logger import LoggerFactory
 
 # Logger instance
@@ -63,6 +65,11 @@ class TestSessionFactory:
 
         except PermissionError:
             pytest.skip("Credential related to account enforcing 2FA, skipping...")
+        except RuntimeError as e:
+            if "auth-get-sso-cookie: command not found" in str(e):
+                pytest.skip("Session cookie package not available")
+            else:
+                raise e
         finally:
             os.remove(temp_file)
 

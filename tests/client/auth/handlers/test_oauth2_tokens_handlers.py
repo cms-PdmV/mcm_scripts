@@ -4,27 +4,23 @@ Provides some tests for the module
 correctness.
 """
 
+import json
 import os
 import stat
-import tempfile
-from pathlib import Path
 
 import pytest
-import json
-from pytest import FixtureRequest
 import requests
-from utils.logger import LoggerFactory
-
 from fixtures.files import create_empty_file, empty_json_file, read_only_file
 from fixtures.oauth import (
-    correct_application,
     client_id,
     client_secret,
-    stdin_enabled,
+    correct_application,
     credentials_available,
+    stdin_enabled,
 )
-from client.auth.handlers.oauth2_tokens import AccessTokenHandler, IDTokenHandler
 
+from client.auth.handlers.oauth2_tokens import AccessTokenHandler, IDTokenHandler
+from utils.logger import LoggerFactory
 
 # Logger instance
 logger = LoggerFactory.getLogger("http_client.tests")

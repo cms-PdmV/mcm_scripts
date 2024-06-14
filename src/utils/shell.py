@@ -3,9 +3,9 @@ Provides some pure-functions to interact with
 the OS via shell executions.
 """
 
-import sys
 import platform
 import subprocess
+import sys
 
 
 def run_command(
@@ -51,4 +51,6 @@ def describe_platform() -> str:
     execution environment. This is useful for including
     User-Agent headers.
     """
-    return f"(Python: {sys.version}) ({platform.system()}: {platform.architecture()}: {platform.machine()})"
+    version = sys.version_info
+    python_version = f"{version.major}.{version.minor}.{version.micro}"
+    return f"(Python: {python_version}) ({platform.system()}: {platform.machine()})"

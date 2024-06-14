@@ -11,8 +11,8 @@ import requests
 from requests.sessions import Session
 
 from client.auth.auth_interface import AuthInterface
-from utils.shell import run_command
 from utils.logger import LoggerFactory
+from utils.shell import run_command
 
 
 class SessionCookieHandler(AuthInterface):

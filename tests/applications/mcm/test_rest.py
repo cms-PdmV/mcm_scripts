@@ -4,11 +4,12 @@ the McM REST module and the authentication mechanisms.
 """
 
 import os
+
 import pytest
-from pathlib import Path
-from utils.logger import LoggerFactory
-from rest import McM
 from fixtures.files import create_empty_file
+
+from rest import McM
+from utils.logger import LoggerFactory
 
 # Logger
 logger = LoggerFactory.getLogger("http_client.tests")
