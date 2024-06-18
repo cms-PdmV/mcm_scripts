@@ -7,10 +7,10 @@ from pathlib import Path
 
 import requests
 
-from client.auth.auth_interface import AuthInterface
-from client.auth.handlers.oauth2_tokens import AccessTokenHandler, IDTokenHandler
-from client.auth.handlers.session_cookies import SessionCookieHandler
-from utils.logger import LoggerFactory
+from rest.client.auth.auth_interface import AuthInterface
+from rest.client.auth.handlers.oauth2_tokens import AccessTokenHandler, IDTokenHandler
+from rest.client.auth.handlers.session_cookies import SessionCookieHandler
+from rest.utils.logger import LoggerFactory
 
 
 class AuthenticatedSession(requests.Session):

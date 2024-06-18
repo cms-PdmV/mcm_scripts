@@ -4,4 +4,4 @@ like the old structure used to do.
 Just to keep backward compatibility.
 """
 
-from applications.mcm.core import McM
+from rest.applications.mcm.core import McM

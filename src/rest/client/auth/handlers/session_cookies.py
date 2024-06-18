@@ -10,9 +10,9 @@ from pathlib import Path
 import requests
 from requests.sessions import Session
 
-from client.auth.auth_interface import AuthInterface
-from utils.logger import LoggerFactory
-from utils.shell import run_command
+from rest.client.auth.auth_interface import AuthInterface
+from rest.utils.logger import LoggerFactory
+from rest.utils.shell import run_command
 
 
 class SessionCookieHandler(AuthInterface):
@@ -36,7 +36,7 @@ class SessionCookieHandler(AuthInterface):
             cookie = MozillaCookieJar(self._credential_path)
             cookie.load()
             return cookie
-        except LoadError:
+        except (LoadError, OSError):
             return None
 
     def _request_credential(self) -> MozillaCookieJar:

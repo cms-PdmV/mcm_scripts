@@ -19,8 +19,8 @@ from fixtures.oauth import (
     stdin_enabled,
 )
 
-from client.auth.handlers.oauth2_tokens import AccessTokenHandler, IDTokenHandler
-from utils.logger import LoggerFactory
+from rest.client.auth.handlers.oauth2_tokens import AccessTokenHandler, IDTokenHandler
+from rest.utils.logger import LoggerFactory
 
 # Logger instance
 logger = LoggerFactory.getLogger("http_client.tests")

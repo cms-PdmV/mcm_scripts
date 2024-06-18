@@ -11,8 +11,8 @@ from pathlib import Path
 import requests
 from requests.sessions import Session
 
-from client.auth.auth_interface import AuthInterface
-from utils.logger import LoggerFactory
+from rest.client.auth.auth_interface import AuthInterface
+from rest.utils.logger import LoggerFactory
 
 
 class AccessTokenHandler(AuthInterface):

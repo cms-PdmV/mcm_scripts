@@ -6,7 +6,7 @@ correctness.
 
 import getpass
 
-import utils.shell as sh
+import rest.utils.shell as sh
 
 
 def test_run_command() -> None:

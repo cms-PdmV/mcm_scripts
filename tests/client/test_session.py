@@ -19,9 +19,9 @@ from fixtures.oauth import (
 )
 from requests.exceptions import SSLError
 
-from client.auth.auth_interface import AuthInterface
-from client.session import SessionFactory
-from utils.logger import LoggerFactory
+from rest.client.auth.auth_interface import AuthInterface
+from rest.client.session import SessionFactory
+from rest.utils.logger import LoggerFactory
 
 # Logger instance
 logger = LoggerFactory.getLogger("http_client.tests")

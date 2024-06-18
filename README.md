@@ -5,15 +5,33 @@ Repository for using McM scripts and example scripts
 > [!NOTE]  
 > This new version is still in development!
 
-Create a new virtual environment using Python 3.11, install `poetry` and the required dependencies.
+#### Prerequisite
 
-`python3.11 -m venv venv && source ./venv/bin/activate && pip install poetry && poetry install`
+Create an isolated virtual environment using a Python version >= 3.11 via:
 
-Run several tests via:
+`python3.11 -m venv venv && source ./venv/bin/activate`
+
+#### Development version
+
+If you want to set up a development environment to contribute to this project:
+
+Install `poetry` and the required dependencies.
+
+`pip install poetry && poetry install`
+
+Run the test suite via:
 `poetry run pytest -s -vv`
 
 > [!IMPORTANT]
 > Make sure your execution environment has a valid Kerberos ticket to consume CERN services!
+
+#### Build package
+
+If you just want to use this package in your own project, install it via:
+
+`pip install git+https://github.com/cms-PdmV/mcm_scripts.git@refactor/rest-client`
+
+Make sure to remove the `sys.path.append(...)` statements to avoid overloading old versions from AFS.
 
 ### Basic info
 * Link to McM: https://cms-pdmv-prod.web.cern.ch/mcm/

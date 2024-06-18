@@ -12,7 +12,7 @@ import requests
 from fixtures.files import create_empty_file
 from fixtures.oauth import correct_application
 
-from client.auth.handlers.session_cookies import SessionCookieHandler
+from rest.client.auth.handlers.session_cookies import SessionCookieHandler
 
 
 class TestSessionCookieHandler:

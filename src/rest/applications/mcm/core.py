@@ -7,9 +7,9 @@ from pathlib import Path
 
 import requests
 
-from client.session import SessionFactory
-from utils.logger import LoggerFactory
-from utils.shell import describe_platform
+from rest.client.session import SessionFactory
+from rest.utils.logger import LoggerFactory
+from rest.utils.shell import describe_platform
 
 
 class McM:

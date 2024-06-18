@@ -9,7 +9,7 @@ import pytest
 from fixtures.files import create_empty_file
 
 from rest import McM
-from utils.logger import LoggerFactory
+from rest.utils.logger import LoggerFactory
 
 # Logger
 logger = LoggerFactory.getLogger("http_client.tests")

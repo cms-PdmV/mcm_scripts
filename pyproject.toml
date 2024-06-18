@@ -1,14 +1,13 @@
 [tool.poetry]
-name = "http-client"
+name = "pdmv-http-client"
 version = "2.0.0"
 description = "A HTTP client wrapper to handle authenticated requests to CERN internal applications"
 authors = ["PdmV Development Team <pdmv.service@cern.ch>"]
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/cms-PdmV/mcm_scripts.git"
 packages = [
-    {include = "client", from = "src"},
-    {include = "utils", from = "src"},
-    {include = "fixtures", from = "tests"}
+    {include = "rest", from = "src"}
 ]
 
 [tool.poetry.dependencies]
@@ -29,6 +28,9 @@ skip = ["venv"]
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = "INFO"
+pythonpath = [
+    "tests"
+]
 
 [build-system]
 requires = ["poetry-core"]
