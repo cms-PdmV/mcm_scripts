@@ -6,10 +6,11 @@ the OS via shell executions.
 import platform
 import subprocess
 import sys
+from typing import Union
 
 
 def run_command(
-    command: str | list[str], env: dict[str, str] = {}
+    command: Union[str, list[str]], env: dict[str, str] = {}
 ) -> tuple[str, str, int]:
     """
     Executes a command or a list of commands

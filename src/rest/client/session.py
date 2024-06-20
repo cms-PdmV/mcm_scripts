@@ -4,6 +4,7 @@ to the web service automatically.
 """
 
 from pathlib import Path
+from typing import Union
 
 import requests
 
@@ -22,7 +23,7 @@ class AuthenticatedSession(requests.Session):
         self._logger = LoggerFactory.getLogger("http_client.client")
 
     def request(
-        self, method: str | bytes, url: str | bytes, *args, **kwargs
+        self, method: Union[str, bytes], url: Union[str, bytes], *args, **kwargs
     ) -> requests.Response:
         response = super().request(method, url, *args, **kwargs)
         for attempt in enumerate(range(self._max_attempts), start=1):

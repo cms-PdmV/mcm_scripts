@@ -4,6 +4,7 @@ REST client for McM application.
 
 import os
 from pathlib import Path
+from typing import Union
 
 import requests
 
@@ -73,7 +74,7 @@ class McM:
         Configures the HTTP session depending on the chosen authentication method.
         """
         target_application = "cms-ppd-pdmv-device-flow"
-        mcm_session: requests.Session | None = None
+        mcm_session: Union[requests.Session, None] = None
         if self._id == McM.SSO:
             mcm_session = SessionFactory.configure_by_session_cookie(
                 url=self.server, credential_path=self.credentials_path

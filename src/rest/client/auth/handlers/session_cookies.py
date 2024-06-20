@@ -6,6 +6,7 @@ to load a cookie from the filesystem.
 import os
 from http.cookiejar import LoadError, MozillaCookieJar
 from pathlib import Path
+from typing import Union
 
 import requests
 from requests.sessions import Session
@@ -28,10 +29,10 @@ class SessionCookieHandler(AuthInterface):
     def __init__(self, url: str, credential_path: Path):
         self._url = url
         self._credential_path = credential_path
-        self._credential: MozillaCookieJar | None = None
+        self._credential: Union[MozillaCookieJar, None] = None
         self._logger = LoggerFactory.getLogger("http_client.client")
 
-    def _load_credential(self) -> MozillaCookieJar | None:
+    def _load_credential(self) -> Union[MozillaCookieJar, None]:
         try:
             cookie = MozillaCookieJar(self._credential_path)
             cookie.load()

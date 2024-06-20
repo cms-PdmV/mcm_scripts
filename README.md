@@ -7,9 +7,9 @@ Repository for using McM scripts and example scripts
 
 #### Prerequisite
 
-Create an isolated virtual environment using a Python version >= 3.11 via:
+Create an isolated virtual environment using a Python version >= 3.9 via:
 
-`python3.11 -m venv venv && source ./venv/bin/activate`
+`python3.9 -m venv venv && source ./venv/bin/activate`
 
 #### Development version
 
