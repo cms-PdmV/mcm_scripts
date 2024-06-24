@@ -19,6 +19,18 @@ def create_empty_file(permissions) -> Path:
     os.chmod(temp_file_name, permissions)
     return temp_file_name
 
+@pytest.fixture
+def writable_file():
+    """
+    Creates a writable file and disposes it when
+    the execution finishes.
+    """
+    file = create_empty_file(0o700)
+    yield file
+    try:
+        os.remove(file)
+    except FileNotFoundError:
+        pass
 
 @pytest.fixture
 def read_only_file() -> Path:

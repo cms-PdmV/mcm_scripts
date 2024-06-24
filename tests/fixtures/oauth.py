@@ -1,18 +1,16 @@
 import os
 
 import pytest
+import functools
 from pytest import FixtureRequest
 
-
 @pytest.fixture
-def client_id():
-    return os.getenv("ACCESS_TOKEN_CLIENT_ID", "")
-
-
-@pytest.fixture
-def client_secret():
-    return os.getenv("ACCESS_TOKEN_CLIENT_SECRET", "")
-
+def access_token_credentials() -> tuple[str, str]:
+    client_id = os.getenv("ACCESS_TOKEN_CLIENT_ID", "")
+    client_secret = os.getenv("ACCESS_TOKEN_CLIENT_SECRET", "")
+    if not (client_id and client_secret):
+        pytest.skip("Client credentials not provided for requesting an access token...")
+    return client_id, client_secret
 
 @pytest.fixture
 def web_application() -> str:
@@ -55,8 +53,18 @@ def stdin_enabled(request: FixtureRequest) -> None:
         )
         pytest.skip(reason)
 
-
-@pytest.fixture
-def credentials_available(client_id, client_secret) -> None:
-    if not (client_id and client_secret):
-        pytest.skip("Client credentials not provided for requesting an access token...")
+def session_cookie_issues(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except PermissionError:
+            pytest.skip("Credential related to account enforcing 2FA, skipping...")
+        except RuntimeError as e:
+            if "auth-get-sso-cookie: command not found" in str(e):
+                pytest.skip("Session cookie package not available")
+            if "No Kerberos credentials available" in str(e):
+                pytest.skip("No Kerberos credentials available, request a Kerberos ticket to CERN realm...")
+            else:
+                raise e
+    return wrapper

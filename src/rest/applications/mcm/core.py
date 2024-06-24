@@ -30,13 +30,16 @@ class McM:
 
     SSO = "sso"
     OIDC = "oidc"
+    OAUTH = "oauth2"
     COOKIE_ENV_VAR = "MCM_COOKIE_PATH"
 
-    def __init__(self, id=SSO, debug=False, cookie=None, dev=True):
+    def __init__(self, id=SSO, debug=False, cookie=None, dev=True, client_id="", client_secret=""):
         self._id = id
         self._debug = debug
         self._cookie = cookie
         self._dev = dev
+        self._client_id = client_id,
+        self._client_secret = client_secret
         self.credentials_path = self._credentials_path()
 
         self.logger = LoggerFactory.getLogger("http_client.mcm")
@@ -84,6 +87,14 @@ class McM:
                 url=self.server,
                 credential_path=self.credentials_path,
                 target_application=target_application,
+            )
+        elif self._id == McM.OAUTH:
+            mcm_session = SessionFactory.configure_by_access_token(
+                url=self.server,
+                credential_path=self.credentials_path,
+                target_application=target_application,
+                client_id=self._client_id,
+                client_secret=self._client_secret
             )
         else:
             self.logger.warning("Using McM client without providing authentication")

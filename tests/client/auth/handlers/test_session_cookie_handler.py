@@ -7,33 +7,40 @@ correctness.
 import os
 import stat
 
-import pytest
 import requests
-from fixtures.files import create_empty_file
-from fixtures.oauth import correct_application
+from fixtures.files import create_empty_file, writable_file
+from fixtures.oauth import correct_application, session_cookie_issues
+
+from pathlib import Path
 
 from rest.client.auth.handlers.session_cookies import SessionCookieHandler
 
 
 class TestSessionCookieHandler:
 
-    def test_session_cookie_handler(self, correct_application) -> None:
+    @session_cookie_issues
+    def test_session_cookie_handler(self, correct_application, writable_file) -> None:
         url, _ = correct_application
-        temp_file = create_empty_file(0o700)
         session = requests.Session()
         cookie_handler = SessionCookieHandler(
             url=url,
-            credential_path=temp_file,
+            credential_path=writable_file,
         )
-        try:
-            cookie_handler.configure(session)
-            assert stat.S_IMODE(temp_file.stat().st_mode) == 0o600
-        except PermissionError:
-            pytest.skip("Credential related to account enforcing 2FA, skipping...")
-        except RuntimeError as e:
-            if "auth-get-sso-cookie: command not found" in str(e):
-                pytest.skip("Session cookie package not available")
-            else:
-                raise e
-        finally:
-            os.remove(temp_file)
+        cookie_handler.configure(session)
+        assert stat.S_IMODE(writable_file.stat().st_mode) == 0o600
+
+    @session_cookie_issues
+    def test_invalid_file(self, correct_application, writable_file) -> None:
+        url, _ = correct_application
+        os.remove(writable_file)
+        assert isinstance(writable_file, Path)
+        assert not writable_file.exists()
+
+        session = requests.Session()
+        cookie_handler = SessionCookieHandler(
+            url=url,
+            credential_path=writable_file,
+        )
+        cookie_handler.configure(session)
+        assert writable_file.exists()
+        assert stat.S_IMODE(writable_file.stat().st_mode) == 0o600
