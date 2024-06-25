@@ -15,8 +15,7 @@ from fixtures.mcm import (
 from fixtures.oauth import stdin_enabled
 
 
-@pytest.mark.usefixtures("stdin_enabled")
-@pytest.mark.usefixtures("production_manager_or_higher")
+@pytest.mark.usefixtures("stdin_enabled", "production_manager_or_higher")
 class TestInvalidateDeleteRequest:
     """
     Test cases for the class `InvalidateDeleteRequests`.
