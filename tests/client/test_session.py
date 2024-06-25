@@ -1,17 +1,17 @@
 """
 Provides some tests for the module
-`src/client/session.py` to verify its
+`src/rest/client/session.py` to verify its
 correctness.
 """
 
 import pytest
 from fixtures.files import writable_file
 from fixtures.oauth import (
-    session_cookie_issues,
     access_token_credentials,
     correct_application,
     fails_by_permissions,
     fails_by_resource_requiring_2fa,
+    session_cookie_issues,
     stdin_enabled,
 )
 from requests.exceptions import SSLError
@@ -21,7 +21,7 @@ from rest.client.session import SessionFactory
 from rest.utils.logger import LoggerFactory
 
 # Logger instance
-logger = LoggerFactory.getLogger("http_client.tests")
+logger = LoggerFactory.getLogger("pdmv-http-client.tests")
 
 
 class TestSessionFactory:
@@ -30,6 +30,7 @@ class TestSessionFactory:
     properly a `request.Session` and renew the credentials
     when required.
     """
+
     @session_cookie_issues
     def test_session_cookie_handler(self, correct_application, writable_file):
         web_application, _ = correct_application
@@ -40,9 +41,7 @@ class TestSessionFactory:
 
         # Perform an authenticated request
         index_page = by_session_cookie.get(web_application)
-        assert (
-            "Welcome to the McM Monte-Carlo Request Management" in index_page.text
-        )
+        assert "Welcome to the McM Monte-Carlo Request Management" in index_page.text
         assert index_page.status_code == 200
         assert AuthInterface.validate_response(index_page)
 
@@ -52,17 +51,12 @@ class TestSessionFactory:
 
         index_page = by_session_cookie.get(web_application)
         assert len(by_session_cookie.cookies) != 0
-        assert (
-            "Welcome to the McM Monte-Carlo Request Management" in index_page.text
-        )
+        assert "Welcome to the McM Monte-Carlo Request Management" in index_page.text
         assert index_page.status_code == 200
         assert AuthInterface.validate_response(index_page)
 
     def test_access_token_handler(
-        self,
-        access_token_credentials,
-        correct_application,
-        writable_file
+        self, access_token_credentials, correct_application, writable_file
     ):
         client_id, client_secret = access_token_credentials
         web_application, target_application = correct_application
@@ -123,7 +117,9 @@ class TestSessionFactory:
         assert AuthInterface.validate_response(index_page)
 
     @session_cookie_issues
-    def test_fails_by_resource_requiring_2fa(self, writable_file, fails_by_resource_requiring_2fa):
+    def test_fails_by_resource_requiring_2fa(
+        self, writable_file, fails_by_resource_requiring_2fa
+    ):
         web_application, _ = fails_by_resource_requiring_2fa
         try:
             with pytest.raises(RuntimeError):

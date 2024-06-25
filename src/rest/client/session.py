@@ -20,7 +20,7 @@ class AuthenticatedSession(requests.Session):
         self._handler = handler
         self._max_attempts = 3
         self._handler.configure(session=self)
-        self._logger = LoggerFactory.getLogger("http_client.client")
+        self._logger = LoggerFactory.getLogger("pdmv-http-client.client")
 
     def request(
         self, method: Union[str, bytes], url: Union[str, bytes], *args, **kwargs

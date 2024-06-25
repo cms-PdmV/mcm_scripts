@@ -1,17 +1,16 @@
 """
 Provides some tests for the module
-`src/auth/handlers/session_cookies.py` to verify its
+`src/rest/client/auth/handlers/session_cookies.py` to verify its
 correctness.
 """
 
 import os
 import stat
+from pathlib import Path
 
 import requests
 from fixtures.files import create_empty_file, writable_file
 from fixtures.oauth import correct_application, session_cookie_issues
-
-from pathlib import Path
 
 from rest.client.auth.handlers.session_cookies import SessionCookieHandler
 

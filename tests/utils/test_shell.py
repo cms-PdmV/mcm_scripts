@@ -1,6 +1,6 @@
 """
 Provides some tests for the module
-`src/utils/shell.py` to verify its
+`src/rest/utils/shell.py` to verify its
 correctness.
 """
 

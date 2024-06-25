@@ -19,6 +19,7 @@ def create_empty_file(permissions) -> Path:
     os.chmod(temp_file_name, permissions)
     return temp_file_name
 
+
 @pytest.fixture
 def writable_file():
     """
@@ -31,6 +32,7 @@ def writable_file():
         os.remove(file)
     except FileNotFoundError:
         pass
+
 
 @pytest.fixture
 def read_only_file() -> Path:

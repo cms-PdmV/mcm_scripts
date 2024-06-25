@@ -1,6 +1,6 @@
 """
 Main operations to load, save and renew credentials
-for a HTTP client session.
+for an HTTP client session.
 """
 
 from abc import ABC, abstractmethod
@@ -16,7 +16,7 @@ class AuthInterface(ABC):
 
     For this context, a credential could be:
         - OAuth2 token: Requested via `Client Credentials` or `Device Authorization` grants.
-            - Format: Json Web Tokens (JWT)
+            - Format: JSON Web Tokens (JWT)
         - HTTP cookie: A cookie file requested using CERN internal packages.
             - Format: Netscape Cookie
 
@@ -62,7 +62,7 @@ class AuthInterface(ABC):
     @abstractmethod
     def authenticate(self) -> None:
         """
-        Provides an entrypoint to automatically scan if it is possible
+        Provides an entry point to automatically scan if it is possible
         to set credentials by picking them from default locations
         or requests them to the CERN Auth service. Also, this is useful
         for renewing credentials when they are expired.
@@ -82,7 +82,7 @@ class AuthInterface(ABC):
         """
         Checks that a given response has been redirected to
         the CERN Authentication login server or been rejected by it
-        server because a lack of permissions.
+        server because of a lack of permissions.
 
         Args:
             response: Response to check

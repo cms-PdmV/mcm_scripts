@@ -1,8 +1,9 @@
 """
-REST client for McM application.
+REST client for the McM application.
 """
 
 import os
+import warnings
 from pathlib import Path
 from typing import Union
 
@@ -33,16 +34,18 @@ class McM:
     OAUTH = "oauth2"
     COOKIE_ENV_VAR = "MCM_COOKIE_PATH"
 
-    def __init__(self, id=SSO, debug=False, cookie=None, dev=True, client_id="", client_secret=""):
+    def __init__(
+        self, id=SSO, debug=False, cookie=None, dev=True, client_id="", client_secret=""
+    ):
         self._id = id
         self._debug = debug
         self._cookie = cookie
         self._dev = dev
-        self._client_id = client_id,
+        self._client_id = client_id
         self._client_secret = client_secret
         self.credentials_path = self._credentials_path()
 
-        self.logger = LoggerFactory.getLogger("http_client.mcm")
+        self.logger = LoggerFactory.getLogger("pdmv-http-client.mcm")
         self.server = self._target_web_application()
         self.credentials_path = self._credentials_path()
         self.session = self._create_session()
@@ -94,7 +97,7 @@ class McM:
                 credential_path=self.credentials_path,
                 target_application=target_application,
                 client_id=self._client_id,
-                client_secret=self._client_secret
+                client_secret=self._client_secret,
             )
         else:
             self.logger.warning("Using McM client without providing authentication")
@@ -109,21 +112,53 @@ class McM:
         return f"<McM id: {self._id} server: {self.server} cookie: {self._cookie}>"
 
     def __get(self, url):
+        warnings.warn(
+            "This name mangled method will be removed in the future, use self._get(...) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._get(url=url)
+
+    def __put(self, url, data):
+        warnings.warn(
+            "This name mangled method will be removed in the future, use self._put(...) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._put(url=url, data=data)
+
+    def __post(self, url, data):
+        warnings.warn(
+            "This name mangled method will be removed in the future, use self._post(...) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._post(url=url, data=data)
+
+    def __delete(self, url):
+        warnings.warn(
+            "This name mangled method will be removed in the future, use self._delete(...) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._delete(url=url)
+
+    def _get(self, url):
         full_url = f"{self.server}{url}"
         response = self.session.get(url=full_url)
         return response.json()
 
-    def __put(self, url, data):
+    def _put(self, url, data):
         full_url = f"{self.server}{url}"
         response = self.session.put(url=full_url, json=data)
         return response.json()
 
-    def __post(self, url, data):
+    def _post(self, url, data):
         full_url = f"{self.server}{url}"
         response = self.session.post(url=full_url, json=data)
         return response.json()
 
-    def __delete(self, url):
+    def _delete(self, url):
         full_url = f"{self.server}{url}"
         response = self.session.delete(url=full_url)
         return response.json()
@@ -148,7 +183,7 @@ class McM:
                 object_type,
             )
             url = "restapi/%s/%s/%s" % (object_type, method, object_id)
-            result = self.__get(url).get("results")
+            result = self._get(url).get("results")
             if not result:
                 return None
 
@@ -163,7 +198,7 @@ class McM:
                     page,
                     query,
                 )
-                results = self.__get(url).get("results", [])
+                results = self._get(url).get("results", [])
                 self.logger.debug(
                     "Found %s %s in page %s for query %s",
                     len(results),
@@ -206,7 +241,7 @@ class McM:
         method - action to be performed, default is 'save'
         """
         url = "restapi/%s/%s" % (object_type, method)
-        res = self.__put(url, object_data)
+        res = self._put(url, object_data)
         return res
 
     def approve(self, object_type, object_id, level=None):
@@ -215,75 +250,73 @@ class McM:
         else:
             url = "restapi/%s/approve/%s/%d" % (object_type, object_id, level)
 
-        return self.__get(url)
+        return self._get(url)
 
     def clone_request(self, object_data):
         return self.put("requests", object_data, method="clone")
 
     def get_range_of_requests(self, query):
-        res = self.__put("restapi/requests/listwithfile", data={"contents": query})
+        res = self._put("restapi/requests/listwithfile", data={"contents": query})
         return res.get("results", None)
 
     def delete(self, object_type, object_id):
         url = "restapi/%s/delete/%s" % (object_type, object_id)
-        self.__delete(url)
+        self._delete(url)
 
     def forceflow(self, prepid):
         """
-        Force a flow on a chained request with given prepid
+        Force a flow on a chained request with given `prepid`
         """
-        res = self.__get("restapi/chained_requests/flow/%s/force" % (prepid))
+        res = self._get("restapi/chained_requests/flow/%s/force" % (prepid))
         return res.get("results", None)
 
     def reset(self, prepid):
         """
         Reset a request
         """
-        res = self.__get("restapi/requests/reset/%s" % (prepid))
+        res = self._get("restapi/requests/reset/%s" % (prepid))
         return res.get("results", None)
 
     def soft_reset(self, prepid):
         """
         Soft reset a request
         """
-        res = self.__get("restapi/requests/soft_reset/%s" % (prepid))
+        res = self._get("restapi/requests/soft_reset/%s" % (prepid))
         return res.get("results", None)
 
     def option_reset(self, prepid):
         """
         Option reset a request
         """
-        res = self.__get("restapi/requests/option_reset/%s" % (prepid))
+        res = self._get("restapi/requests/option_reset/%s" % (prepid))
         return res.get("results", None)
 
     def ticket_generate(self, ticket_prepid):
         """
         Generate chains for a ticket
         """
-        res = self.__get("restapi/mccms/generate/%s" % (ticket_prepid))
+        res = self._get("restapi/mccms/generate/%s" % (ticket_prepid))
         return res.get("results", None)
 
     def ticket_generate_reserve(self, ticket_prepid):
         """
         Generate and reserve chains for a ticket
         """
-        res = self.__get("restapi/mccms/generate/%s/reserve" % (ticket_prepid))
+        res = self._get("restapi/mccms/generate/%s/reserve" % (ticket_prepid))
         return res.get("results", None)
 
     def rewind(self, chained_request_prepid):
         """
         Rewind a chained request
         """
-        res = self.__get(
-            "restapi/chained_requests/rewind/%s" % (chained_request_prepid)
-        )
+        res = self._get("restapi/chained_requests/rewind/%s" % (chained_request_prepid))
         return res.get("results", None)
 
     def flow(self, chained_request_prepid):
         """
         Flow a chained request
         """
-        res = self.__get("restapi/chained_requests/flow/%s" % (chained_request_prepid))
+        res = self._get("restapi/chained_requests/flow/%s" % (chained_request_prepid))
         return res.get("results", None)
 
     def root_requests_from_ticket(self, ticket_prepid):

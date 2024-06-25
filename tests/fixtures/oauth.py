@@ -1,8 +1,9 @@
+import functools
 import os
 
 import pytest
-import functools
 from pytest import FixtureRequest
+
 
 @pytest.fixture
 def access_token_credentials() -> tuple[str, str]:
@@ -11,6 +12,7 @@ def access_token_credentials() -> tuple[str, str]:
     if not (client_id and client_secret):
         pytest.skip("Client credentials not provided for requesting an access token...")
     return client_id, client_secret
+
 
 @pytest.fixture
 def web_application() -> str:
@@ -53,6 +55,7 @@ def stdin_enabled(request: FixtureRequest) -> None:
         )
         pytest.skip(reason)
 
+
 def session_cookie_issues(f):
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
@@ -64,7 +67,10 @@ def session_cookie_issues(f):
             if "auth-get-sso-cookie: command not found" in str(e):
                 pytest.skip("Session cookie package not available")
             if "No Kerberos credentials available" in str(e):
-                pytest.skip("No Kerberos credentials available, request a Kerberos ticket to CERN realm...")
+                pytest.skip(
+                    "No Kerberos credentials available, request a Kerberos ticket to CERN realm..."
+                )
             else:
                 raise e
+
     return wrapper

@@ -1,6 +1,6 @@
 """
 This module provides a handler
-to load a cookie from the filesystem.
+to load a cookie from the file system.
 """
 
 import os
@@ -19,7 +19,7 @@ from rest.utils.shell import run_command
 class SessionCookieHandler(AuthInterface):
     """
     Loads a Netscape cookie from a file and configures
-    a HTTP session to make use of it.
+    an HTTP session to make use of it.
 
     Attributes:
         _url: Target web application URL.
@@ -30,7 +30,7 @@ class SessionCookieHandler(AuthInterface):
         self._url = url
         self._credential_path = credential_path
         self._credential: Union[MozillaCookieJar, None] = None
-        self._logger = LoggerFactory.getLogger("http_client.client")
+        self._logger = LoggerFactory.getLogger("pdmv-http-client.client")
 
     def _load_credential(self) -> Union[MozillaCookieJar, None]:
         try:
@@ -84,7 +84,7 @@ class SessionCookieHandler(AuthInterface):
             f"Unable to consume a resource in the target web application ({self._url}) "
             "using session cookies.\n"
             "Remember this method only works if 2FA is not enabled.\n"
-            "If you enforce it, please use another authentication strategy instead."
+            "Please use another authentication strategy instead."
         )
         raise PermissionError(msg)
 

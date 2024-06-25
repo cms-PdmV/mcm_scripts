@@ -18,7 +18,7 @@ from rest.utils.logger import LoggerFactory
 class AccessTokenHandler(AuthInterface):
     """
     Loads an access token from a JSON file and configures
-    a HTTP session to make use of it. This implements the API
+    an HTTP session to make use of it. This implements the API
     access procedure described in:
 
         - https://auth.docs.cern.ch/user-documentation/oidc/api-access/
@@ -51,7 +51,7 @@ class AccessTokenHandler(AuthInterface):
         self._client_secret = client_secret
         self._target_application = target_application
         self._credential: dict = {}
-        self._logger = LoggerFactory.getLogger("http_client.client")
+        self._logger = LoggerFactory.getLogger("pdmv-http-client.client")
 
     def _load_credential(self) -> dict:
         try:
@@ -111,7 +111,7 @@ class AccessTokenHandler(AuthInterface):
 
     def _validate(self, access_token: dict) -> bool:
         """
-        Checks if the provided cookie is valid to consume a resource in
+        Checks if the provided access token is valid to consume a resource in
         the target web application.
 
         Args:
@@ -129,7 +129,7 @@ class IDTokenHandler(AuthInterface):
     """
     Loads an ID token from a file or requests a new one
     via Device Code Authorization Grant or refresh tokens (in case it is
-    provided in a token file). This implements the process described at:
+    provided in the JSON file). This implements the process described at:
 
     - https://auth.docs.cern.ch/user-documentation/oidc/device-code/
 
@@ -139,7 +139,7 @@ class IDTokenHandler(AuthInterface):
             and some metadata.
         _credential_path: Path to load the access token from or to persist in.
         _client_id: ID for the client application, registered in the application portal,
-            to be use. This application MUST be configured as a public client, so that no
+            to use. This application MUST be configured as a public client, so that no
             client secret is required.
         _target_application: Client ID linked to the target web
             application.
@@ -162,7 +162,7 @@ class IDTokenHandler(AuthInterface):
         self._credential_path = credential_path
         self._target_application = target_application
         self._credential: dict = {}
-        self._logger = LoggerFactory.getLogger("http_client.client")
+        self._logger = LoggerFactory.getLogger("pdmv-http-client.client")
 
     def _load_credential(self) -> dict:
         try:
@@ -259,7 +259,7 @@ class IDTokenHandler(AuthInterface):
 
         # Request a new ID token
         self._logger.debug(
-            "Requesting new ID token asking the user to manually complete the flow"
+            "Requesting new ID token, asking the user to manually complete the flow"
         )
         return self._request_new_id_token()
 
@@ -293,11 +293,11 @@ class IDTokenHandler(AuthInterface):
 
     def _validate(self, id_token: dict) -> bool:
         """
-        Checks if the provided cookie is valid to consume a resource in
+        Checks if the provided ID token is valid to consume a resource in
         the target web application.
 
         Args:
-            access_token: OAuth2 access token retrieve from
+            id_token: OIDC ID token retrieve from
                 CERN Authentication service.
         """
         raw_access_token = id_token.get("access_token", "")
