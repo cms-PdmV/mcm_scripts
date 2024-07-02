@@ -2,8 +2,6 @@
 Repository for using McM scripts and example scripts
 
 ### How to run this
-> [!NOTE]  
-> This new version is still in development!
 
 #### Prerequisite
 
