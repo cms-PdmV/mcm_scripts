@@ -7,6 +7,7 @@ from fixtures.oauth import stdin_enabled
 
 from rest.applications.mcm.core import McM
 from rest.applications.mcm.invalidate_request import InvalidateDeleteRequests
+from rest.applications.mcm.resubmission import ChainRequestResubmitter
 from rest.utils.miscellaneous import shuffle_pick
 
 
@@ -18,6 +19,11 @@ def mcm_development() -> McM:
 @pytest.fixture
 def invalidator_development(mcm_development: McM) -> InvalidateDeleteRequests:
     return InvalidateDeleteRequests(mcm=mcm_development)
+
+
+@pytest.fixture
+def chain_request_resubmitter_dev(mcm_development: McM) -> ChainRequestResubmitter:
+    return ChainRequestResubmitter(mcm=mcm_development)
 
 
 @pytest.fixture
