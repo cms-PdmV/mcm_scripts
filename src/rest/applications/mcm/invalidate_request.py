@@ -313,16 +313,8 @@ class InvalidateDeleteRequests:
         """
         root_requests: list[str] = []
         for rid in requests_prepid:
-            data: Union[dict, None] = self.mcm.get(
-                object_type=self._request_type, object_id=rid
-            )
-            if data:
-                is_root_request: bool = (data.get("type") == "LHE") and bool(
-                    data.get("validation", {}).get("results", {})
-                )
-                if is_root_request:
-                    root_requests.append(rid)
-
+            if self.mcm.is_root_request(request=rid):
+                root_requests.append(rid)
         return root_requests
 
     def invalidate_delete_cascade_requests(
