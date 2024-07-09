@@ -155,7 +155,7 @@ class ChainRequestResubmitter:
             raise RuntimeError(msg)
 
     def _pick_target_campaign(
-        self, chained_campaign_prepid: str, datatier: str
+        self, chained_campaign_prepid: str, datatier: str, soft_datatier: bool
     ) -> Union[str, None]:
         """
         Retrieves the campaign related to the desired data tier for a given chained campaign
@@ -163,6 +163,8 @@ class ChainRequestResubmitter:
         Args:
             chained_campaign_prepid: Chained campaign identifier.
             datatier: Data tier related to the campaign to retrieve.
+            soft_datatier: Force using the latest campaign found in the chained request
+                if there is none related to the requested data tier.
 
         Returns:
             Campaign related to the data tier, None if not found
@@ -186,9 +188,19 @@ class ChainRequestResubmitter:
             chained_campaign_prepid,
             campaigns,
         )
+        if soft_datatier:
+            latest_campaign_range = campaigns[-1]
+            for c in latest_campaign_range:
+                c_str = c or ""
+                if c_str.startswith("Run"):
+                    self.logger.debug("Using the latest available campaign: %s", c_str)
+                    return c_str
+
         return None
 
-    def _reserve_chain_request(self, chain_request_prepid: str, datatier: str) -> None:
+    def _reserve_chain_request(
+        self, chain_request_prepid: str, datatier: str, soft_datatier: bool
+    ) -> None:
         """
         Reserve a chained request up to a desired data tier. This creates the
         remaining requests in the chained request based on a chained campaign
@@ -197,6 +209,8 @@ class ChainRequestResubmitter:
         Args:
             chain_request_prepid: Chained request identifier.
             datatier: Limits the requests created up to this data tier.
+            soft_datatier: Force using the latest campaign found in the chained request
+                if there is none related to the requested data tier.
         """
         chained_request: Union[dict, None] = self._mcm.get(
             object_type="chained_requests", object_id=chain_request_prepid
@@ -214,7 +228,9 @@ class ChainRequestResubmitter:
             )
 
         target_campaign = self._pick_target_campaign(
-            chained_campaign_prepid=member_of_campaign, datatier=datatier
+            chained_campaign_prepid=member_of_campaign,
+            datatier=datatier,
+            soft_datatier=soft_datatier,
         )
         if not target_campaign:
             msg = (
@@ -341,6 +357,7 @@ class ChainRequestResubmitter:
         self,
         root_request_prepid: str,
         datatier: str = "nanoaod",
+        soft_datatier: bool = False,
         tracking_tag: Union[str, None] = None,
     ) -> None:
         """
@@ -352,6 +369,8 @@ class ChainRequestResubmitter:
         Args:
             root_request_prepid: Root request identifier.
             datatier: Limit data tier for reserving all the chained requests.
+            soft_datatier: Force using the latest campaign found in the chained request
+                if there is none related to the requested data tier.
             tracking_tag: Includes a tracking tag for the root request
                 to monitor its progress after patching this.
         """
@@ -395,7 +414,11 @@ class ChainRequestResubmitter:
             self.logger.info(
                 "Reserving chained requests (%s) up to data tier: %s", ch_r, datatier
             )
-            self._reserve_chain_request(chain_request_prepid=ch_r, datatier=datatier)
+            self._reserve_chain_request(
+                chain_request_prepid=ch_r,
+                datatier=datatier,
+                soft_datatier=soft_datatier,
+            )
 
         # Reinject the chained requests
         for ch_r in chained_requests_prepid:
