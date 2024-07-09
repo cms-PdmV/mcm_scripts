@@ -142,7 +142,17 @@ class InvalidateDeleteRequests:
                 )
             }
             if len(grouped_chain) != 1:
-                msg = f"There should be only one group. Group result: {grouped_chain}"
+                error_chained_request_prepids: list[str] = [
+                    ch["prepid"]
+                    for ch in chain_request_more_than_root
+                    if ch.get("prepid")
+                ]
+                msg = (
+                    "Unable to process chained requests. After grouping them by the second request, "
+                    f"more than one group has been found. This expects only one.\n"
+                    f"Request groups: {grouped_chain.keys()}\n"
+                    f"Chained requests: {pformat(error_chained_request_prepids)}"
+                )
                 self.logger.error(msg)
                 raise ValueError(msg)
 
