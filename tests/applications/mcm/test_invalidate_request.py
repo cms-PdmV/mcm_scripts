@@ -178,3 +178,14 @@ class TestInvalidateDeleteRequest:
                 object_id=chain_request,
             )
             assert not chain_request_data, "Chained request shouldn't exist anymore"
+
+    def test_root_request_several_groups(self, invalidator_development) -> None:
+        """
+        Check an exception is raised when attempting to invalidate all the chained requests
+        in a root request that includes several groups of different intermediate requests.
+        """
+        root_request_example = "PPD-Run3Winter23GS-00001"
+        with pytest.raises(ValueError, match="more than one group has been found"):
+            invalidator_development._invalidate_delete_root_request(
+                root_prepid=root_request_example
+            )

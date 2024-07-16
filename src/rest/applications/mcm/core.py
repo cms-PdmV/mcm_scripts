@@ -338,3 +338,23 @@ class McM:
 
         requests = self.get_range_of_requests(query)
         return requests
+
+    def is_root_request(self, request: Union[str, dict]) -> bool:
+        """
+        Checks if a request is a root request.
+
+        Args:
+            request: Request prepid or request data.
+                The request must exists and its data must comply the expected
+                schema.
+        """
+        request_data: dict = {}
+        if isinstance(request, str):
+            # Received request prepid
+            request_data = self.get(object_type="requests", object_id=request) or {}
+        elif isinstance(request, dict):
+            request_data = request
+        else:
+            raise ValueError(f"Unexpected value: {request} - {type(request)}")
+
+        return request_data.get("type", "") in ("LHE", "Prod")
