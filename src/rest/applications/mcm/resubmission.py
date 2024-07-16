@@ -366,6 +366,9 @@ class ChainRequestResubmitter:
         deleting and invalidating all the found requests except for the root one.
         Then, it recreates them by reserving the chain to the desired data tier and finally reinjects them.
 
+        If you require only to resubmit a very specific part (some particular step like MiniAOD or NanoAOD)
+        of a chained request, avoid using this. Rewind the chain to the previous step manually and resubmit it.
+
         Args:
             root_request_prepid: Root request identifier.
             datatier: Limit data tier for reserving all the chained requests.

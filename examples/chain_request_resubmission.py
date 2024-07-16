@@ -1,5 +1,5 @@
 """
-This examples shows some alternatives to patch several chained
+This example shows some alternatives to patch several chained
 requests when it is required to apply changes on its
 the chained campaign.
 """
@@ -27,7 +27,7 @@ chained_campaign = mcm.get(
 )
 assert isinstance(chained_campaign, dict), "Chained campaign not found"
 
-block_number = random.randint(1, 6)
+block_number = 6
 print("Setting block number to: ", block_number)
 chained_campaign["action_parameters"]["block_number"] = block_number
 chained_campaign[
