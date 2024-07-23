@@ -27,7 +27,7 @@ Run the test suite via:
 
 If you just want to use this package in your own project, install it via:
 
-`pip install git+https://github.com/cms-PdmV/mcm_scripts.git@refactor/rest-client`
+`pip install git+https://github.com/cms-PdmV/mcm_scripts.git`
 
 Make sure to remove the `sys.path.append(...)` statements to avoid overloading old versions from AFS.
 
