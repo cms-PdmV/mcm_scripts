@@ -26,7 +26,7 @@ class AuthenticatedSession(requests.Session):
         self, method: Union[str, bytes], url: Union[str, bytes], *args, **kwargs
     ) -> requests.Response:
         response = super().request(method, url, *args, **kwargs)
-        for attempt in enumerate(range(self._max_attempts), start=1):
+        for attempt, _ in enumerate(range(self._max_attempts), start=1):
             if self._handler.validate_response(response):
                 return response
             else:

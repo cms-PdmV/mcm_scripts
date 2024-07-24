@@ -41,6 +41,9 @@ class SessionCookieHandler(AuthInterface):
             return None
 
     def _request_credential(self) -> MozillaCookieJar:
+        # Remove the cookie file in case there's available
+        self._credential_path.unlink(missing_ok=True)
+
         # Request a session cookie using CERN internal packages.
         command = (
             f"auth-get-sso-cookie -u '{self._url}' -o '{str(self._credential_path)}'"
