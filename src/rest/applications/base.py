@@ -202,7 +202,7 @@ class BaseClient:
         )
         return self._delete(url=url)
 
-    def _get(self, url: str) -> dict:
+    def _get(self, url: str):
         """
         Performs a GET request to the target resource.
         This assumes the target resource's response format is JSON.
@@ -218,7 +218,7 @@ class BaseClient:
         response = self.session.get(url=full_url)
         return response.json()
 
-    def _put(self, url: str, data: dict) -> dict:
+    def _put(self, url: str, data: dict):
         """
         Performs a PUT request to the target resource.
         This assumes the target resource's response format is JSON.
@@ -235,7 +235,7 @@ class BaseClient:
         response = self.session.put(url=full_url, json=data)
         return response.json()
 
-    def _post(self, url: str, data: dict) -> dict:
+    def _post(self, url: str, data: dict):
         """
         Performs a POST request to the target resource.
         This assumes the target resource's response format is JSON.
@@ -252,7 +252,7 @@ class BaseClient:
         response = self.session.post(url=full_url, json=data)
         return response.json()
 
-    def _delete(self, url: str) -> dict:
+    def _delete(self, url: str):
         """
         Performs a DELETE request to the target resource.
         This assumes the target resource's response format is JSON.
