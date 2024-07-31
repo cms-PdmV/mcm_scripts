@@ -2,166 +2,34 @@
 REST client for the McM application.
 """
 
-import os
-import warnings
-from pathlib import Path
 from typing import Union
-
-import requests
-
-from rest.client.session import SessionFactory
-from rest.utils.logger import LoggerFactory
-from rest.utils.shell import describe_platform
+from rest.applications.base import BaseClient
 
 
-class McM:
+class McM(BaseClient):
     """
-    Initializes the API.
-
-    Arguments:
-        id: The authentication mechanism to use. Supported values are 'sso' to
-            use auth-get-sso-cookie, 'oidc' for OIDC authentication
-            ("new SSO"). Any other value results in no authentication being
-            used.
-        debug: Controls the amount of logging printed to the terminal.
-        cookie: The path of a cookie JAR in Netscape format, to be used for
-            authentication.
-        dev: Whether to use the dev or production McM instance (default: dev).
+    Initializes an HTTP client for querying McM.
     """
-
-    SSO = "sso"
-    OIDC = "oidc"
-    OAUTH = "oauth2"
-    COOKIE_ENV_VAR = "MCM_COOKIE_PATH"
 
     def __init__(
-        self, id=SSO, debug=False, cookie=None, dev=True, client_id="", client_secret=""
+        self,
+        id: str = BaseClient.SSO,
+        debug: bool = False,
+        cookie: Union[str, None] = None,
+        dev: bool = True,
+        client_id: str = "",
+        client_secret: str = "",
     ):
-        self._id = id
-        self._debug = debug
-        self._cookie = cookie
-        self._dev = dev
-        self._client_id = client_id
-        self._client_secret = client_secret
-        self.credentials_path = self._credentials_path()
-
-        self.logger = LoggerFactory.getLogger("pdmv-http-client.mcm")
-        self.server = self._target_web_application()
-        self.credentials_path = self._credentials_path()
-        self.session = self._create_session()
-
-    def _target_web_application(self) -> str:
-        """
-        Sets the production or development web application.
-        """
-        if self._dev:
-            return "https://cms-pdmv-dev.web.cern.ch/mcm/"
-
-        return "https://cms-pdmv-prod.web.cern.ch/mcm/"
-
-    def _credentials_path(self) -> Path:
-        """
-        Sets the path from which credentials are going to be loaded and saved.
-        """
-        if self._cookie:
-            return Path(self._cookie)
-
-        from_env_var = os.getenv(McM.COOKIE_ENV_VAR)
-        if from_env_var:
-            return Path(from_env_var)
-
-        private_folder = Path.home() / Path("private")
-        private_folder.mkdir(mode=0o700, exist_ok=True)
-        suffix: str = "mcm-credential-dev" if self._dev else "mcm-credential-prod"
-        return private_folder / Path(suffix)
-
-    def _create_session(self) -> requests.Session:
-        """
-        Configures the HTTP session depending on the chosen authentication method.
-        """
-        target_application = "cms-ppd-pdmv-device-flow"
-        mcm_session: Union[requests.Session, None] = None
-        if self._id == McM.SSO:
-            mcm_session = SessionFactory.configure_by_session_cookie(
-                url=self.server, credential_path=self.credentials_path
-            )
-        elif self._id == McM.OIDC:
-            mcm_session = SessionFactory.configure_by_id_token(
-                url=self.server,
-                credential_path=self.credentials_path,
-                target_application=target_application,
-            )
-        elif self._id == McM.OAUTH:
-            mcm_session = SessionFactory.configure_by_access_token(
-                url=self.server,
-                credential_path=self.credentials_path,
-                target_application=target_application,
-                client_id=self._client_id,
-                client_secret=self._client_secret,
-            )
-        else:
-            self.logger.warning("Using McM client without providing authentication")
-            mcm_session = requests.Session()
-
-        # Include some headers for the session
-        user_agent = {"User-Agent": f"PdmV HTTP client (McM): {describe_platform()}"}
-        mcm_session.headers.update(user_agent)
-        return mcm_session
-
-    def __repr__(self):
-        return f"<McM id: {self._id} server: {self.server} cookie: {self._cookie}>"
-
-    def __get(self, url):
-        warnings.warn(
-            "This name mangled method will be removed in the future, use self._get(...) instead",
-            DeprecationWarning,
-            stacklevel=2,
+        # Set the HTTP session
+        super().__init__(
+            app="mcm",
+            id=id,
+            debug=debug,
+            cookie=cookie,
+            dev=dev,
+            client_id=client_id,
+            client_secret=client_secret,
         )
-        return self._get(url=url)
-
-    def __put(self, url, data):
-        warnings.warn(
-            "This name mangled method will be removed in the future, use self._put(...) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._put(url=url, data=data)
-
-    def __post(self, url, data):
-        warnings.warn(
-            "This name mangled method will be removed in the future, use self._post(...) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._post(url=url, data=data)
-
-    def __delete(self, url):
-        warnings.warn(
-            "This name mangled method will be removed in the future, use self._delete(...) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._delete(url=url)
-
-    def _get(self, url):
-        full_url = f"{self.server}{url}"
-        response = self.session.get(url=full_url)
-        return response.json()
-
-    def _put(self, url, data):
-        full_url = f"{self.server}{url}"
-        response = self.session.put(url=full_url, json=data)
-        return response.json()
-
-    def _post(self, url, data):
-        full_url = f"{self.server}{url}"
-        response = self.session.post(url=full_url, json=data)
-        return response.json()
-
-    def _delete(self, url):
-        full_url = f"{self.server}{url}"
-        response = self.session.delete(url=full_url)
-        return response.json()
 
     # McM methods
     def get(self, object_type, object_id=None, query="", method="get", page=-1):
