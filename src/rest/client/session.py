@@ -19,14 +19,17 @@ class AuthenticatedSession(requests.Session):
         super().__init__()
         self._handler = handler
         self._max_attempts = 3
-        self._handler.configure(session=self)
         self._logger = LoggerFactory.getLogger("pdmv-http-client.client")
+        self._handler.configure(session=self)
 
     def request(
         self, method: Union[str, bytes], url: Union[str, bytes], *args, **kwargs
     ) -> requests.Response:
-        response = super().request(method, url, *args, **kwargs)
         for attempt, _ in enumerate(range(self._max_attempts), start=1):
+            # Restart the session and send the request
+            with self:
+                response = super().request(method, url, *args, **kwargs)
+
             if self._handler.validate_response(response):
                 return response
             else:
@@ -38,7 +41,6 @@ class AuthenticatedSession(requests.Session):
                 )
                 self._handler.authenticate()
                 self._handler.configure(session=self)
-                response = super().request(method, url, *args, **kwargs)
 
         self._logger.warning(
             "Unable to renew credentials for (%s) after %s attempts: HTTP code %s",
