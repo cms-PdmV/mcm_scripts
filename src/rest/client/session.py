@@ -26,6 +26,10 @@ class AuthenticatedSession(requests.Session):
         self, method: Union[str, bytes], url: Union[str, bytes], *args, **kwargs
     ) -> requests.Response:
         for attempt, _ in enumerate(range(self._max_attempts), start=1):
+            # Check the timeout and force it if required.
+            default_timeout = 60 * 5
+            kwargs.setdefault("timeout", default_timeout)
+
             # Restart the session and send the request
             with self:
                 response = super().request(method, url, *args, **kwargs)
