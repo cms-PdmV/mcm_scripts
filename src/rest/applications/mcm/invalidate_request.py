@@ -36,8 +36,9 @@ class InvalidateDeleteRequests:
         Creates a logger to record the performed steps.
         """
         logger: logging.Logger = logging.getLogger(__name__)
+        logger.handlers.clear() # Avoid to record the same message twice in the log
         formatter = logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
-        current_date = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M"))
+        current_date = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
         fh: logging.Handler = logging.FileHandler(
             f"mcm_invalidate_requests_{current_date}.log"
         )
