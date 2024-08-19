@@ -78,7 +78,6 @@ class BaseClient:
         self._client_secret = client_secret
         
         self.logger = LoggerFactory.getLogger(f"pdmv-http-client.{self._app}")
-        self.credentials_path = self._credentials_path()
         self.server = self._target_web_application()
         self.credentials_path = self._credentials_path()
         self.session = self._create_session()
