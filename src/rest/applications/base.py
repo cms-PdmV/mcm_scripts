@@ -5,7 +5,6 @@ object for PdmV applications.
 """
 
 import os
-import warnings
 from pathlib import Path
 from typing import Union
 
@@ -76,7 +75,7 @@ class BaseClient:
         self._dev = dev
         self._client_id = client_id
         self._client_secret = client_secret
-        
+
         self.logger = LoggerFactory.getLogger(f"pdmv-http-client.{self._app}")
         self.server = self._target_web_application()
         self.credentials_path = self._credentials_path()
@@ -168,38 +167,6 @@ class BaseClient:
 
     def __repr__(self):
         return f"<HTTP client (For: {self._app}) id: {self._id} server: {self.server} cookie: {self._cookie}>"
-
-    def __get(self, url):
-        warnings.warn(
-            "This name mangled method will be removed in the future, use self._get(...) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._get(url=url)
-
-    def __put(self, url, data):
-        warnings.warn(
-            "This name mangled method will be removed in the future, use self._put(...) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._put(url=url, data=data)
-
-    def __post(self, url, data):
-        warnings.warn(
-            "This name mangled method will be removed in the future, use self._post(...) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._post(url=url, data=data)
-
-    def __delete(self, url):
-        warnings.warn(
-            "This name mangled method will be removed in the future, use self._delete(...) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._delete(url=url)
 
     def _get(self, url: str):
         """

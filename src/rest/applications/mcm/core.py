@@ -2,7 +2,9 @@
 REST client for the McM application.
 """
 
+import warnings
 from typing import Union
+
 from rest.applications.base import BaseClient
 
 
@@ -30,6 +32,38 @@ class McM(BaseClient):
             client_id=client_id,
             client_secret=client_secret,
         )
+
+    def __get(self, url):
+        warnings.warn(
+            "This name mangled method will be removed in the future, use self._get(...) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._get(url=url)
+
+    def __put(self, url, data):
+        warnings.warn(
+            "This name mangled method will be removed in the future, use self._put(...) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._put(url=url, data=data)
+
+    def __post(self, url, data):
+        warnings.warn(
+            "This name mangled method will be removed in the future, use self._post(...) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._post(url=url, data=data)
+
+    def __delete(self, url):
+        warnings.warn(
+            "This name mangled method will be removed in the future, use self._delete(...) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._delete(url=url)
 
     # McM methods
     def get(self, object_type, object_id=None, query="", method="get", page=-1):
