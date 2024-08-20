@@ -78,7 +78,7 @@ class BaseClient:
 
         self.logger = LoggerFactory.getLogger(f"pdmv-http-client.{self._app}")
         self.server = self._target_web_application()
-        self.credentials_path = self._credentials_path()
+        self.credentials_path: Union[Path, None] = None
         self.session = self._create_session()
 
     def _target_web_application(self) -> str:
@@ -135,10 +135,12 @@ class BaseClient:
         """
         session: Union[requests.Session, None] = None
         if self._id == self.SSO:
+            self.credentials_path = self._credentials_path()
             session = SessionFactory.configure_by_session_cookie(
                 url=self.server, credential_path=self.credentials_path
             )
         elif self._id == self.OIDC:
+            self.credentials_path = self._credentials_path()
             target_application = "cms-ppd-pdmv-device-flow"
             session = SessionFactory.configure_by_id_token(
                 url=self.server,
@@ -146,6 +148,7 @@ class BaseClient:
                 target_application=target_application,
             )
         elif self._id == self.OAUTH:
+            self.credentials_path = self._credentials_path()
             target_application = "cms-ppd-pdmv-dev" if self._dev else "cms-ppd-pdmv"
             session = SessionFactory.configure_by_access_token(
                 url=self.server,
@@ -166,7 +169,7 @@ class BaseClient:
         return session
 
     def __repr__(self):
-        return f"<HTTP client (For: {self._app}) id: {self._id} server: {self.server} cookie: {self._cookie}>"
+        return f"<HTTP client (For: {self._app}) id: {self._id} server: {self.server} credential: {self.credentials_path}>"
 
     def _get(self, url: str):
         """
