@@ -79,5 +79,3 @@ class ReReco(BaseClient):
         url = "api/%s/%s" % (object_type, method)
         res = self._post(url, object_data)
         return res
-
-rereco = ReReco(id=ReReco.OIDC, dev=False)
