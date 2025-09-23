@@ -85,10 +85,14 @@ class McM(BaseClient):
                 object_type,
             )
             url = "restapi/%s/%s/%s" % (object_type, method, object_id)
-            result = self._get(url).get("results")
+            result = self._get(url)
+            if type(result) == list:
+                return result
+            elif type(result) == str:
+                return result
+            result = result.get("results")
             if not result:
                 return None
-
             return result
         elif query:
             if page != -1:
@@ -146,6 +150,17 @@ class McM(BaseClient):
         res = self._put(url, object_data)
         return res
 
+    def post(self, object_type, object_data, method):
+        """
+        Post data into McM
+        object_type - [chained_campaigns, chained_requests, campaigns, requests, flows, etc.]
+        object_data - JSON to be posted
+        method - restapi to be called
+        """
+        url = 'restapi/%s/%s' % (object_type, method)
+        res = self._post(url, object_data)
+        return res
+    
     def approve(self, object_type, object_id, level=None):
         if level is None:
             url = "restapi/%s/approve/%s" % (object_type, object_id)
