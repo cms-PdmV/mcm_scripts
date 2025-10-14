@@ -13,12 +13,18 @@ Create an isolated virtual environment using a Python version >= 3.9 via:
 
 If you want to set up a development environment to contribute to this project:
 
-Install `poetry` and the required dependencies.
+Install `uv` and the required dependencies.
 
-`pip install poetry && poetry install`
+`pip install uv`
+
+Set the current `venv` to use with `uv`:
+
+`export UV_PROJECT_ENVIRONMENT="${VIRTUAL_ENV}"`
+
+Install the packages via: `uv sync`
 
 Run the test suite via:
-`poetry run pytest -s -vv`
+`uv run pytest -s -vv`
 
 > [!IMPORTANT]
 > Make sure your execution environment has a valid Kerberos ticket to consume CERN services!
