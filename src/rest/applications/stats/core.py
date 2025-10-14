@@ -41,6 +41,16 @@ class Stats2(BaseClient):
         url = f"api/get_json/{workflow_name}"
         return self._get(url=url)
 
+    def update_workflow(self, workflow_name: str) -> dict:
+        """
+        Updates the content of a document, from dbs and reqmgr
+
+        Args:
+            workflow_name: ReqMgr2 Request ID (a.k.a workflow in PdmV applications).
+        """
+        url = f"api/update?workflow_name={workflow_name}"
+        return self._get(url=url)
+    
     def get_prepid(self, prepid: str) -> list[dict]:
         """
         Retrieves a list of Stats2 documents related to the given prepid.
