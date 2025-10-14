@@ -64,7 +64,7 @@ class ReReco(BaseClient):
                 return results
         else:
             #nothing to do
-            return False
+            return None
 
     def put(self, object_type, object_data, method="create"):
         url = "api/%s/%s" % (object_type, method)
