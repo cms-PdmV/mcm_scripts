@@ -2,7 +2,6 @@
 REST client for the ReReco application
 """
 
-import warnings
 from typing import Union
 
 from rest.applications.base import BaseClient
