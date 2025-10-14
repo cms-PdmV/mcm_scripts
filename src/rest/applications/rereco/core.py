@@ -37,9 +37,7 @@ class ReReco(BaseClient):
         if object_id:
             object_id = object_id.strip()
             url = "api/%s/%s/%s" % (object_type, method, object_id)
-            #print(url)
             result = self._get(url).get("response")
-            #print(result)
             if not result:
                 return None
             return result
@@ -50,9 +48,6 @@ class ReReco(BaseClient):
                     page,
                     query,
                 )
-                #print(url)
-                #r = self._get(url)
-                #print(r)
                 results = self._get(url).get("response",{}).get("results", [])
                 return results
             else:
