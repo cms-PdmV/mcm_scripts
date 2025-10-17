@@ -1,3 +1,9 @@
+> [!IMPORTANT]
+> This repository has been migrated to the PPD Technical Support team inside the CERN GitLab instance: [pdmv-http-client](https://gitlab.cern.ch/cms-ppd/technical-support/libraries/pdmv-http-client). Please open and follow issues directly there, do not open or follow them here!
+
+>[!NOTE]
+> The latest version of this project is now available at PyPI :tada:, check there more details about how to use it: [pdmv-http-client](https://pypi.org/project/pdmv-http-client/)
+
 # McM Scripts
 Repository for using McM scripts and example scripts
 
